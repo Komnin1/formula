@@ -1,0 +1,5 @@
+# Cross-compiles Formula's Windows test program (runs at native speed on any host).
+FROM rust:1-bookworm
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 \
+ && rustup target add x86_64-pc-windows-gnu

@@ -1,0 +1,30 @@
+# Builds the Windows installer on GitHub's Windows machines, so no Windows PC is needed.
+# On GitHub: Actions → "Windows installer" → Run workflow. When it finishes, download
+# "Formula-Setup" from the run's Artifacts. Pushing a tag such as v0.0.2 also runs it.
+name: Windows installer
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Build formula.exe
+        run: cargo build --release
+      - name: Make the installer
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"' | Select-Object -First 1).Matches[0].Groups[1].Value
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" installer\windows\formula.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Formula-Setup
+          path: installer/windows/Output/*.exe

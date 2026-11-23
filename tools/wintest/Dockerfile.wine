@@ -1,0 +1,7 @@
+# Wine (a Windows stand-in) with a virtual screen, to run the Windows test program.
+FROM debian:bookworm-slim
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends wine wine64 xvfb xauth ca-certificates \
+ && apt-get clean
+ENV WINEDEBUG=-all WINEPREFIX=/root/.wine
+RUN xvfb-run -a wineboot --init && wineserver -w || true

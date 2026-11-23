@@ -1,0 +1,15 @@
+# Build output (recreated by `cargo build`)
+/target
+
+# Ready-made installers and zips: these go on the GitHub Releases page instead
+/dist
+installer/*/Output/
+installer/*.tar
+
+# Scratch files from development
+/shots/tmp/
+
+# macOS / R clutter
+.DS_Store
+._*
+.Rhistory
