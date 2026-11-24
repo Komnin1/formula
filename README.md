@@ -83,9 +83,10 @@ yourself, see [BUILD.md](BUILD.md).
 
 ### Names and structures
 
-- Name → structure and structure → name, offline: about 330 common compounds (drugs,
-  vitamins, amino acids, sugars, natural products, reagents) plus systematic IUPAC names
-  for chains, rings, common heterocycles and fused ring systems, with R/S and E/Z.
+- **Name-to-structure conversion (and vice versa).** Systematic IUPAC names are generated
+  for most drawn structures. *R*/*S* and *E*/*Z* descriptors are supported. About 300
+  well-known compounds (drugs, vitamins, natural products, reagents) also get their trivial
+  names.
 - Paste or type SMILES, Molfile or CDXML text to get a structure; copy SMILES out.
 
 ### Biopolymers
