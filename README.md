@@ -91,7 +91,8 @@ yourself, see [BUILD.md](BUILD.md).
 
 ### Biopolymers
 
-- Protein, DNA and RNA sequences: FASTA import, complement, transcription and translation,
+- Protein, DNA and RNA sequences: FASTA import, complement and reverse complement,
+  transcription (DNA → RNA), back-transcription (RNA → DNA), translation (RNA → protein),
   formulas and masses.
 - Peptides with D-amino acids (lower-case letters) and cyclic peptides drawn as full
   structures or as HELM-style monomer circles.
