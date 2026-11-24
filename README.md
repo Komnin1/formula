@@ -79,7 +79,7 @@ yourself, see [BUILD.md](BUILD.md).
   to the atoms; hover a peak to see its atoms.
 - Copy the peak list as text in the common experimental-section style (close to ACS), e.g.
   "¹H NMR (predicted, 400 MHz, CDCl₃) δ 4.10 (q, J = 7.0 Hz, 2H), …".
-- Isotope-labelled compounds and partial enrichment are handled.
+- Isotope labels (¹³C, ¹⁵N, ²H) are taken into account, including partial enrichment.
 
 ### Names and structures
 
