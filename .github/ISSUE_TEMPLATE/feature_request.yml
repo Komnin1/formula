@@ -1,0 +1,43 @@
+name: Feature request
+description: Suggest a new feature or an improvement.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the suggestion. Describing the task you're trying to do helps more
+        than describing a button.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Drawing and editing
+        - Styles, pages and printing
+        - Analysis (formula, masses, mass spectrum, properties)
+        - NMR prediction
+        - Names and structures
+        - Biopolymers (sequences, HELM)
+        - File formats
+        - Copy and paste, Word and other programs
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: task
+    attributes:
+      label: What are you trying to do?
+      description: The task or problem, e.g. "I need to show [M−H]⁻ for carboxylic acids in my experimental section".
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How could Formula help?
+      description: How you imagine it working. Screenshots or sketches are welcome.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: How do you do it now?
+      description: A workaround or another program you use for this, if any.

@@ -1,0 +1,85 @@
+name: Bug report
+description: Something doesn't work, gives a wrong result or crashes.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report a problem. The more precise the report,
+        the faster it can be fixed.
+  - type: input
+    id: version
+    attributes:
+      label: Formula version
+      description: Shown in the side panel ▸ Help tab, under "About".
+      placeholder: e.g. 0.0.7
+    validations:
+      required: true
+  - type: dropdown
+    id: system
+    attributes:
+      label: Computer
+      options:
+        - Mac, Apple silicon (M1 or later)
+        - Mac, Intel
+        - Windows, 64-bit
+        - Windows, 32-bit
+        - Linux, x86-64
+        - Linux, ARM64 (aarch64)
+    validations:
+      required: true
+  - type: input
+    id: os-version
+    attributes:
+      label: Operating system version
+      placeholder: e.g. macOS 15.2, Windows 11, Ubuntu 24.04
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Drawing and editing
+        - Styles, pages and printing
+        - Analysis (formula, masses, mass spectrum, properties)
+        - NMR prediction
+        - Names and structures
+        - Biopolymers (sequences, HELM)
+        - Opening or saving files
+        - Export (PDF, SVG, PNG …)
+        - Copy and paste, Word and other programs
+        - Installation or start-up
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you saw, and what you expected instead. For a wrong chemical result (formula, mass, NMR shift, name), please give the correct value and, if possible, its source.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How to make the problem happen again.
+      placeholder: |
+        1. Open the attached file (or draw …)
+        2. Select …
+        3. Choose …
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Files, screenshots or SMILES
+      description: |
+        Drag screenshots here. For a structure, paste its SMILES, or attach the file.
+        GitHub doesn't accept .cdx, .cdxml or .mol files directly: put them in a .zip first.
+        Please don't attach unpublished or confidential structures.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else?
+      description: For example, whether it happened in an earlier version too.
