@@ -1,7 +1,7 @@
 //! The system clipboard for structures.
 //!
-//! Copy puts a vector picture of the structure on the clipboard (PDF on macOS, an Enhanced
-//! Metafile on Windows) with the structure itself (CDXML) stored inside the picture, plus the
+//! Copy puts a picture of the structure on the clipboard (PDF on macOS, an Enhanced Metafile on
+//! Windows, a PNG on Linux) with the structure itself (CDXML) stored inside the picture, plus the
 //! CDXML on its own under a private type. Word and other editors paste the picture; on Windows
 //! the copy is also an embeddable object (see `ole`), which Word pastes as an editable object. Paste looks
 //! through everything on the clipboard (including pictures copied back out of a document, the
@@ -20,6 +20,8 @@ pub struct Rich {
     pub cdxml: String,
     pub pdf: Vec<u8>,
     pub emf: Vec<u8>,
+    /// Linux: the drawing as SVG, turned into a PNG picture for the clipboard.
+    pub svg: String,
     /// Windows: only the embeddable object (and the structure text), no pictures. Programs
     /// such as LibreOffice paste a picture whenever one is offered; without one they paste the
     /// object, which opens in Formula when double-clicked.
@@ -561,10 +563,75 @@ mod sys {
     }
 }
 
+#[cfg(any(all(unix, not(target_os = "macos")), test))]
+/// The SVG drawn into RGBA pixels on white, about 300 dpi (at most 2400 pixels across).
+pub fn rasterize_svg(svg: &str) -> Option<(u32, u32, Vec<u8>)> {
+    let mut opt = resvg::usvg::Options::default();
+    opt.fontdb_mut().load_system_fonts();
+    let tree = resvg::usvg::Tree::from_str(svg, &opt).ok()?;
+    let size = tree.size();
+    let mut k = 300.0 / 72.0;
+    let longest = size.width().max(size.height()) * k;
+    if longest > 2400.0 {
+        k *= 2400.0 / longest;
+    }
+    let (w, h) = ((size.width() * k).ceil().max(1.0) as u32, (size.height() * k).ceil().max(1.0) as u32);
+    let mut pm = resvg::tiny_skia::Pixmap::new(w, h)?;
+    pm.fill(resvg::tiny_skia::Color::WHITE);
+    resvg::render(&tree, resvg::tiny_skia::Transform::from_scale(k, k), &mut pm.as_mut());
+    Some((w, h, pm.take()))
+}
+
+
+// ---------------------------------------------------------------------------
+// Linux and other Unix desktops (X11 and Wayland): a PNG picture, drawn from the SVG.
+
+#[cfg(all(unix, not(target_os = "macos")))]
+mod sys {
+    use super::*;
+    use std::sync::{Mutex, OnceLock};
+
+    /// The clipboard stays open while Formula runs: on Linux the program that copied serves
+    /// the data when another program pastes.
+    fn board() -> Option<&'static Mutex<arboard::Clipboard>> {
+        static B: OnceLock<Option<Mutex<arboard::Clipboard>>> = OnceLock::new();
+        B.get_or_init(|| arboard::Clipboard::new().ok().map(Mutex::new)).as_ref()
+    }
+
+    /// What Formula put there last: picture size, a fingerprint of its pixels, and the structure.
+    static LAST: Mutex<Option<(usize, usize, u64, String)>> = Mutex::new(None);
+
+    fn fingerprint(px: &[u8]) -> u64 {
+        px.iter().step_by(97).fold(0xcbf29ce484222325u64, |h, b| (h ^ *b as u64).wrapping_mul(0x100000001b3))
+    }
+
+    pub fn write(r: &Rich) -> Result<(), String> {
+        let (w, h, px) = rasterize_svg(&r.svg).ok_or("the picture could not be drawn")?;
+        let b = board().ok_or("no clipboard (is a desktop session running?)")?;
+        let mut b = b.lock().map_err(|_| "clipboard busy")?;
+        let fp = fingerprint(&px);
+        b.set_image(arboard::ImageData { width: w as usize, height: h as usize, bytes: std::borrow::Cow::Owned(px) }).map_err(|e| e.to_string())?;
+        *LAST.lock().unwrap() = Some((w as usize, h as usize, fp, r.cdxml.clone()));
+        Ok(())
+    }
+
+    /// Formula's own picture, recognised so Paste brings back the structure.
+    pub fn read_structure() -> Option<Found> {
+        let mut b = board()?.lock().ok()?;
+        let img = b.get_image().ok()?;
+        let last = LAST.lock().ok()?.clone()?;
+        (img.width == last.0 && img.height == last.1 && fingerprint(&img.bytes) == last.2).then(|| Found::Cdxml(last.3))
+    }
+
+    pub fn read_text() -> Option<String> {
+        board()?.lock().ok()?.get_text().ok()
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Other systems: no picture clipboard; the app falls back to text.
 
-#[cfg(not(any(target_os = "macos", windows)))]
+#[cfg(not(any(target_os = "macos", windows, unix)))]
 mod sys {
     use super::*;
     pub fn write(_r: &Rich) -> Result<(), String> {
@@ -579,7 +646,7 @@ mod sys {
 }
 
 /// True where Copy and Paste go through this module (and not egui's text clipboard).
-pub const NATIVE: bool = cfg!(any(target_os = "macos", windows));
+pub const NATIVE: bool = cfg!(any(target_os = "macos", windows, unix));
 
 pub fn write(r: &Rich) -> Result<(), String> {
     sys::write(r)

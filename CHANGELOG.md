@@ -15,6 +15,19 @@ To release a new version:
 
 ## Not yet released
 
+## 0.0.6 — 2026-11-23
+
+Source package: `dist/Formula-0.0.6-source.zip` (see `BUILD.md`).
+
+- Windows and Linux show key combinations as they are typed there: Ctrl, Alt and Shift instead of the Mac symbols ⌘ ⌥ ⇧ (Rotate… is Ctrl+R, Clean Up is Ctrl+Shift+K), in menus, tooltips, the shortcuts list and Help. The Mac version keeps its symbols.
+
+- Scaling keeps proportions:
+  - Object ▸ Scale… (⌘K / Ctrl+K) and the new corner squares of the selection box (drag to scale about the opposite corner) change bond lengths, bond line widths, wedges, hashes, double-bond gaps, atom labels and caption text together;
+  - only the selected structures change, the rest of the drawing keeps the document style;
+  - the size is saved: .cdxml files keep it exactly, and in .cdx/.cdxml the labels are written at their scaled font size, so ChemDraw shows them that size too;
+  - a structure that ChemDraw scaled (labels all larger or smaller than the document's) opens at that size.
+- Linux: Copy now puts a picture (PNG, about 300 dpi) on the clipboard, so LibreOffice and other programs paste a picture instead of SMILES text. It works under X11 and Wayland; pasting it back into Formula gives the structure again.
+
 - ¹H and ¹³C predictions are corrected with measured shifts from the person's report of published spectra (3,656 compounds from 308 open-access articles; 3,462 could be matched peak by peak, giving 70,000 measured shifts):
   - each atom's surroundings out to 2–3 bonds are looked up, and the median difference between measured and predicted shifts for those surroundings is applied, scaled down when few compounds support it and capped (0.5 ppm ¹H, 3 ppm ¹³C);
   - tested on articles kept out of the database, the mean error fell from 0.19 to 0.17 ppm (¹H) and from 2.15 to 2.05 ppm (¹³C);

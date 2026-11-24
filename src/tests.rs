@@ -571,6 +571,82 @@ fn build_nmr_db() {
     std::fs::write("assets/nmr_shifts.bin", bytes).unwrap();
 }
 
+/// Linux Copy: the drawing's SVG becomes a PNG-sized picture on white with dark lines and text
+/// (here tested on any system, with the same drawing code).
+#[test]
+fn copied_structure_becomes_a_picture() {
+    let d = formats::parse_smiles("OC(=O)c1ccccc1N").unwrap();
+    let ctx = egui::Context::default();
+    ctx.run_ui(Default::default(), |_| {}).textures_delta.clear();
+    let svg = crate::render::to_svg(&d, &ctx, false);
+    let (w, h, px) = crate::clip::rasterize_svg(&svg).expect("picture");
+    assert!(w > 100 && h > 100, "{w}×{h}");
+    assert_eq!(px.len(), (w * h * 4) as usize);
+    let dark = px.chunks(4).filter(|p| p[0] < 100 && p[3] > 200).count();
+    let white = px.chunks(4).filter(|p| p[0] > 250).count();
+    assert!(dark > 200 && white > dark * 5, "dark {dark}, white {white}");
+}
+
+#[test]
+#[ignore]
+fn debug_scaled_drawing() {
+    let mut d = formats::parse_smiles("OC(=O)c1ccc(N)cc1").unwrap();
+    let b = formats::parse_smiles("OC(=O)c1ccc(N)cc1").unwrap();
+    d.merge(&b, egui::vec2(160.0, 0.0));
+    let n = d.atoms.len() / 2;
+    let sel = crate::doc::Selection { atoms: (n..d.atoms.len()).collect(), ..Default::default() };
+    let c = d.bounds_of(Some(&sel)).unwrap().left_top();
+    crate::arrange::scale(&mut d, &sel, c, 1.8);
+    std::fs::write("shots/tmp/scaled.cdxml", cdx::write_cdxml(&d)).unwrap();
+}
+
+/// Shortcuts read as each system writes them: Mac symbols on macOS, Ctrl/Alt/Shift elsewhere.
+#[test]
+fn shortcuts_use_the_systems_key_names() {
+    use crate::app::keys;
+    if cfg!(target_os = "macos") {
+        assert_eq!(keys("⇧⌘K"), "⇧⌘K");
+    } else {
+        assert_eq!(keys("⌘R"), "Ctrl+R");
+        assert_eq!(keys("⇧⌘K"), "Ctrl+Shift+K");
+        assert_eq!(keys("⌥⇧⌘L / ⌥⇧⌘C"), "Ctrl+Alt+Shift+L / Ctrl+Alt+Shift+C");
+        assert_eq!(keys("Rotate… (⌘R)"), "Rotate… (Ctrl+R)");
+        assert_eq!(keys("⌘Enter or click"), "Ctrl+Enter or click");
+        assert_eq!(keys("pinch or ⌘-scroll"), "pinch or Ctrl-scroll");
+        assert_eq!(keys("⌘+ ⌘−"), "Ctrl++ Ctrl+−");
+    }
+}
+
+/// Scaling keeps proportions: bonds get longer, and labels, bond widths and captions grow by
+/// the same factor; the size is kept when saving and reopening (both formats). Only the
+/// selected structure changes.
+#[test]
+fn scaling_keeps_proportions() {
+    use crate::doc::*;
+    let mut d = formats::parse_smiles("OC(=O)c1ccccc1.CCN").unwrap();
+    d.captions.push(Caption { pos: egui::pos2(0.0, 80.0), text: "note".into(), size: 12.0, bold: false, italic: false, serif: false, formula: false, color: None, extra: None, seq: None });
+    let first: Vec<usize> = d.fragments().into_iter().max_by_key(|f| f.len()).unwrap();
+    let mut sel = Selection { atoms: first.iter().copied().collect(), ..Default::default() };
+    sel.captions.insert(0);
+    let o = d.atoms[first[0]].pos;
+    let len0 = |d: &Doc| {
+        let b = d.bonds.iter().find(|b| first.contains(&b.a)).unwrap();
+        (d.atoms[b.a].pos - d.atoms[b.b].pos).length()
+    };
+    let before = len0(&d);
+    crate::arrange::scale(&mut d, &sel, o, 2.0);
+    assert!((len0(&d) / before - 2.0).abs() < 1e-3);
+    assert!(first.iter().all(|&i| (d.atoms[i].size - 2.0).abs() < 1e-6));
+    assert!(d.atoms.iter().enumerate().filter(|(i, _)| !first.contains(i)).all(|(_, a)| a.size == 1.0));
+    assert_eq!(d.captions[0].size, 24.0);
+    for back in [cdx::read_cdxml(&cdx::write_cdxml(&d)).unwrap(), cdx::read_cdx(&cdx::write_cdx(&d)).unwrap()] {
+        let big: Vec<f32> = back.atoms.iter().map(|a| a.size).filter(|s| (*s - 1.0).abs() > 0.01).collect();
+        assert!(!big.is_empty() && big.iter().all(|s| (s - 2.0).abs() < 0.05), "{big:?}");
+        // The other structure keeps its normal size.
+        assert!(back.atoms.iter().filter(|a| (a.size - 1.0).abs() < 1e-3).count() >= 3);
+    }
+}
+
 /// The built-in database of learnt corrections loads, reads peak lists as printed in articles,
 /// and is used: it covers common surroundings and moves predictions only a little.
 #[test]

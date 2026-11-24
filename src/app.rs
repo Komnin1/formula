@@ -52,6 +52,8 @@ enum Drag {
     Pan,
     /// Turning the selection with the round handle (angles in radians).
     Rotate { pivot: Pos2, start_ang: f32, orig: Box<Doc>, angle: f32 },
+    /// Dragging a corner of the selection box: scale about the opposite corner.
+    Scale { anchor: Pos2, start: Pos2, orig: Box<Doc>, k: f32 },
 }
 
 /// Small windows that ask for a number.
@@ -806,6 +808,7 @@ impl App {
             let rich = clip::Rich {
                 pdf: if cfg!(target_os = "macos") { export::to_pdf_with_data(&p, ctx, self.color_atoms, Some(&cdxml)) } else { Vec::new() },
                 emf: if cfg!(windows) { emf::to_emf(&p, ctx, self.color_atoms, Some(cdxml.as_bytes())) } else { Vec::new() },
+                svg: if cfg!(all(unix, not(target_os = "macos"))) { render::to_svg(&p, ctx, self.color_atoms) } else { String::new() },
                 cdxml: cdxml.clone(),
                 object_only: object_only && cfg!(windows),
             };
@@ -1292,6 +1295,20 @@ impl App {
         Some(pos2(r.max.x + 10.0, r.min.y - 10.0))
     }
 
+    /// The four corner handles of the selection box: (screen position, the corner in the drawing,
+    /// the opposite corner it scales about).
+    fn scale_handles(&self) -> Vec<(Pos2, Pos2, Pos2)> {
+        if self.sel.is_empty() || !matches!(self.tool, Tool::Lasso | Tool::Marquee) {
+            return vec![];
+        }
+        let Some(b) = self.doc.bounds_of(Some(&self.sel)) else { return vec![] };
+        if b.width() < 1e-3 && b.height() < 1e-3 {
+            return vec![];
+        }
+        let r = Rect::from_two_pos(self.to_screen(b.min), self.to_screen(b.max)).expand(8.0);
+        [(r.left_top(), b.left_top(), b.right_bottom()), (r.right_top(), b.right_top(), b.left_bottom()), (r.right_bottom(), b.right_bottom(), b.left_top()), (r.left_bottom(), b.left_bottom(), b.right_top())].to_vec()
+    }
+
     fn open_dialog_box(&mut self, d: Dialog) {
         self.dialog = Some(d);
         self.dialog_focus = true;
@@ -1388,7 +1405,13 @@ impl App {
                 Dialog::Scale => {
                     let k = self.scale_pct / 100.0;
                     if k > 0.0 && k != 1.0 {
-                        self.transform_selection(|v| v * k, &format!("Scaled to {}%", fmt_deg(self.scale_pct)));
+                        let sel = self.selection_or_all();
+                        if let Some(b) = self.doc.bounds_of(Some(&sel)) {
+                            self.checkpoint();
+                            arrange::scale(&mut self.doc, &sel, b.center(), k);
+                            self.dirty = true;
+                            self.status(format!("Scaled to {}% (bonds, line widths and labels together)", fmt_deg(self.scale_pct)));
+                        }
                     }
                 }
                 Dialog::Color => {
@@ -2293,13 +2316,13 @@ impl App {
 
     fn toolbar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         ui.horizontal(|ui| {
-            if ui.button("New").on_hover_text("New document (⌘N)").clicked() {
+            if ui.button("New").on_hover_text(keys("New document (⌘N)")).clicked() {
                 self.new_doc();
             }
-            if ui.button("Open").on_hover_text("Open a file (⌘O)").clicked() {
+            if ui.button("Open").on_hover_text(keys("Open a file (⌘O)")).clicked() {
                 self.open_dialog(ctx);
             }
-            if ui.button("Save").on_hover_text("Save (⌘S)").clicked() {
+            if ui.button("Save").on_hover_text(keys("Save (⌘S)")).clicked() {
                 self.save(ctx);
             }
             ui.separator();
@@ -2319,11 +2342,11 @@ impl App {
                 let c = self.canvas.center();
                 self.set_zoom(self.zoom * 1.25, c);
             }
-            if ui.button("Fit").on_hover_text("Fit drawing to window (⌘0)").clicked() {
+            if ui.button("Fit").on_hover_text(keys("Fit drawing to window (⌘0)")).clicked() {
                 self.fit_view();
             }
             ui.separator();
-            if ui.button("Clean Up").on_hover_text("Tidy bond lengths and angles (⇧⌘K)").clicked() {
+            if ui.button("Clean Up").on_hover_text(keys("Tidy bond lengths and angles (⇧⌘K)")).clicked() {
                 self.clean_up();
             }
             ui.separator();
@@ -2806,8 +2829,12 @@ impl App {
             let start = self.to_doc(origin);
             let hit = self.doc.hit(start, tol);
             let on_handle = self.rotate_handle().is_some_and(|h| (h - origin).length() <= 10.0);
+            let corner = if on_handle { None } else { self.scale_handles().into_iter().find(|(h, _, _)| (*h - origin).length() <= 7.0) };
             let pivot = if on_handle { arrange::rotation_pivot(&self.doc, &self.sel) } else { None };
-            self.drag = if let Some(pivot) = pivot {
+            self.drag = if let Some((_, start_corner, anchor)) = corner {
+                self.checkpoint();
+                Some(Drag::Scale { anchor, start: start_corner, orig: Box::new(self.doc.clone()), k: 1.0 })
+            } else if let Some(pivot) = pivot {
                 self.checkpoint();
                 Some(Drag::Rotate { pivot, start_ang: angle_of(start - pivot), orig: Box::new(self.doc.clone()), angle: 0.0 })
             } else { match self.tool {
@@ -2861,7 +2888,15 @@ impl App {
                 let delta = resp.drag_delta();
                 let mut erase = None;
                 let mut turn = None;
+                let mut grow = None;
                 match &mut self.drag {
+                    Some(Drag::Scale { anchor, start, k, .. }) => {
+                        // Proportional: the corner moves along the diagonal from the anchor.
+                        let d = *start - *anchor;
+                        let len2 = d.length_sq().max(1e-6);
+                        *k = ((cur - *anchor).dot(d) / len2).max(0.05);
+                        grow = Some(*k);
+                    }
                     Some(Drag::Rotate { pivot, start_ang, angle, .. }) => {
                         let mut a = norm_angle(angle_of(cur - *pivot) - *start_ang);
                         if a > std::f32::consts::PI {
@@ -2901,6 +2936,13 @@ impl App {
                 }
                 if let Some(h) = erase {
                     self.erase_hit(h);
+                }
+                if let (Some(k), Some(Drag::Scale { anchor, orig, .. })) = (grow, &self.drag) {
+                    let (anchor, mut d) = (*anchor, (**orig).clone());
+                    arrange::scale(&mut d, &self.sel, anchor, k);
+                    self.doc = d;
+                    self.dirty = true;
+                    self.status = format!("Scaling to {}%", fmt_deg(k * 100.0));
                 }
                 if let (Some(a), Some(Drag::Rotate { pivot, orig, .. })) = (turn, &self.drag) {
                     let (pivot, mut d) = (*pivot, (**orig).clone());
@@ -3118,6 +3160,9 @@ impl App {
                 // Merge moved atoms that landed on others (e.g. joining two structures).
                 self.merge_overlaps();
             }
+            Drag::Scale { k, .. } => {
+                self.status(format!("Scaled to {}% (bonds, line widths and labels together)", fmt_deg(k * 100.0)));
+            }
             Drag::Rotate { angle, .. } => {
                 let deg = angle.to_degrees();
                 self.status(format!("Rotated {}° {}", fmt_deg(deg.abs()), if deg >= 0.0 { "clockwise" } else { "counter-clockwise" }));
@@ -3204,6 +3249,18 @@ impl App {
             painter.line_segment([c - vec2(6.0, 0.0), c + vec2(6.0, 0.0)], s);
             painter.line_segment([c - vec2(0.0, 6.0), c + vec2(0.0, 6.0)], s);
             painter.circle_stroke(c, 3.0, s);
+        }
+        // Corner squares: drag to scale.
+        let scaling = matches!(self.drag, Some(Drag::Scale { .. }));
+        for (c, _, _) in self.scale_handles() {
+            let hot = pointer.is_some_and(|p| (p - c).length() <= 7.0) && self.drag.is_none();
+            let r = Rect::from_center_size(c, vec2(7.0, 7.0));
+            painter.rect_filled(r, 1.0, if hot || scaling { Color32::from_rgb(200, 220, 250) } else { Color32::WHITE });
+            painter.rect_stroke(r, 1.0, Stroke::new(1.2, ACCENT), egui::StrokeKind::Middle);
+            if hot {
+                painter.ctx().set_cursor_icon(egui::CursorIcon::ResizeNwSe);
+                painter.text(c + vec2(8.0, -6.0), egui::Align2::LEFT_BOTTOM, "drag to scale", egui::FontId::proportional(11.0), Color32::GRAY);
+            }
         }
         let Some(h) = self.rotate_handle() else { return };
         let hot = pointer.is_some_and(|p| (p - h).length() <= 10.0) || matches!(self.drag, Some(Drag::Rotate { .. }));
@@ -3360,7 +3417,7 @@ impl App {
                 if is_label {
                     ui.label(egui::RichText::new("Enter to apply").size(10.0).color(Color32::GRAY));
                 } else {
-                    ui.label(egui::RichText::new("⌘Enter or click outside to finish").size(10.0).color(Color32::GRAY));
+                    ui.label(egui::RichText::new(keys("⌘Enter or click outside to finish")).size(10.0).color(Color32::GRAY));
                 }
             });
         });
@@ -3453,6 +3510,43 @@ const COLORS: &[(&str, Option<Rgb>)] = &[
     ("Purple", Some([130, 40, 180])),
     ("Grey", Some([120, 120, 120])),
 ];
+
+/// Key combinations as the system writes them. Texts use the Mac symbols (⌘ ⌥ ⇧); on Windows
+/// and Linux they become "Ctrl+Alt+Shift+K" in that order (⌘ is the Ctrl key there).
+pub(crate) fn keys(s: &str) -> String {
+    if cfg!(target_os = "macos") {
+        return s.to_string();
+    }
+    let ch: Vec<char> = s.chars().collect();
+    let mut out = String::new();
+    let mut i = 0;
+    while i < ch.len() {
+        if !matches!(ch[i], '⌘' | '⌥' | '⇧') {
+            out.push(ch[i]);
+            i += 1;
+            continue;
+        }
+        let (mut ctrl, mut alt, mut shift) = (false, false, false);
+        while i < ch.len() && matches!(ch[i], '⌘' | '⌥' | '⇧') {
+            match ch[i] {
+                '⌘' => ctrl = true,
+                '⌥' => alt = true,
+                _ => shift = true,
+            }
+            i += 1;
+        }
+        let mods: Vec<&str> = [(ctrl, "Ctrl"), (alt, "Alt"), (shift, "Shift")].into_iter().filter(|m| m.0).map(|m| m.1).collect();
+        out.push_str(&mods.join("+"));
+        // "⌘-scroll" reads "Ctrl-scroll"; otherwise the key follows a "+".
+        if i < ch.len() && ch[i] == '-' && ch.get(i + 1).is_some_and(|c| c.is_alphabetic()) {
+            continue;
+        }
+        if i < ch.len() && !ch[i].is_whitespace() {
+            out.push('+');
+        }
+    }
+    out
+}
 
 fn current_label(doc: &Doc, i: usize) -> String {
     let a = &doc.atoms[i];
@@ -3562,7 +3656,7 @@ fn help_ui(ui: &mut egui::Ui) {
     ui.label(egui::RichText::new(APP_DISCLAIMER).small().weak());
     ui.add_space(6.0);
     ui.label(egui::RichText::new("Drawing").strong());
-    ui.label("• Bond tools: click empty space for a bond, click an atom to grow from it, drag to aim. Click a bond to raise its order (single → double → triple) or flip a wedge.\n• Rings: click empty space, an atom (spiro) or a bond (fused).\n• Chain: drag to draw a zig-zag chain; the count shows while dragging.\n• Text tool: click an atom and type a label (N, OH, NH2, CO2Me, OMe, Ph, NH4+). Click empty space for a caption.\n• Arrows and shapes: drag; pick the type in the toolbar.\n• Rotate: select, then drag the round handle at the top-right of the selection (Shift = 15° steps), or Object ▸ Rotate… (⌘R). A selected branch turns around the atom it hangs from. ⇧⌘H / ⇧⌘V turn the selection over by 180° and keep its stereochemistry.\n• Arrange: Object ▸ Align lines up edges or centres; Object ▸ Distribute spreads objects evenly or with a gap in millimetres.\n• View ▸ Show Rulers / Show Grid: centimetre rulers and a 1 cm grid.");
+    ui.label(keys("• Bond tools: click empty space for a bond, click an atom to grow from it, drag to aim. Click a bond to raise its order (single → double → triple) or flip a wedge.\n• Rings: click empty space, an atom (spiro) or a bond (fused).\n• Chain: drag to draw a zig-zag chain; the count shows while dragging.\n• Text tool: click an atom and type a label (N, OH, NH2, CO2Me, OMe, Ph, NH4+). Click empty space for a caption.\n• Arrows and shapes: drag; pick the type in the toolbar.\n• Rotate: select, then drag the round handle at the top-right of the selection (Shift = 15° steps), or Object ▸ Rotate… (⌘R). A selected branch turns around the atom it hangs from. ⇧⌘H / ⇧⌘V turn the selection over by 180° and keep its stereochemistry.\n• Arrange: Object ▸ Align lines up edges or centres; Object ▸ Distribute spreads objects evenly or with a gap in millimetres.\n• View ▸ Show Rulers / Show Grid: centimetre rulers and a 1 cm grid."));
     ui.add_space(6.0);
     ui.label(egui::RichText::new("Hot keys").strong());
     ui.label("Point at an atom or a bond and type a key. When the pointer is away from the structure, keys act on the hotspot (green dot): the atom you last changed. Arrow keys move the hotspot along bonds; Esc clears it; Delete removes what you point at.");
@@ -3581,13 +3675,13 @@ fn help_ui(ui: &mut egui::Ui) {
     ui.label("Marquee or Lasso: drag around things; Shift adds. Double-click selects a whole structure. Drag a selection to move it; dropping an atom onto another joins them.");
     ui.add_space(6.0);
     ui.label(egui::RichText::new("Keys").strong());
-    ui.label("⌘N new · ⌘O open · ⌘S save · ⇧⌘S save as\n⌘Z undo · ⇧⌘Z redo · ⌘X ⌘C ⌘V · ⌘A select all\n⇧⌘K clean up structure · ⌘+ ⌘− zoom · ⌘0 fit\nScroll to move around, pinch or ⌘-scroll to zoom, right-drag to pan.");
+    ui.label(keys("⌘N new · ⌘O open · ⌘S save · ⇧⌘S save as\n⌘Z undo · ⇧⌘Z redo · ⌘X ⌘C ⌘V · ⌘A select all\n⇧⌘K clean up structure · ⌘+ ⌘− zoom · ⌘0 fit\nScroll to move around, pinch or ⌘-scroll to zoom, right-drag to pan."));
     ui.add_space(6.0);
     ui.label(egui::RichText::new("Files").strong());
     ui.label("Opens and saves CDX and CDXML documents (.cdx, .cdxml, .ctp), molfiles V2000/V3000, SD files, reaction files V2000/V3000, CML and SMILES. Exports PDF, EPS, SVG, PNG, JPEG, GIF, BMP and TIFF. Parts of a CDX or CDXML document this app can't show are kept and written back when you save in the same format.");
     ui.add_space(6.0);
     ui.label(egui::RichText::new("Word, PowerPoint and other documents").strong());
-    ui.label("Copy (⌘C) puts the drawing on the clipboard as a picture with the structure stored inside it. Paste it into Word, PowerPoint or Excel: it shows as a picture. Later, copy that picture there and paste it here (⌘V) to get the editable structure back.");
+    ui.label(keys("Copy (⌘C) puts the drawing on the clipboard as a picture with the structure stored inside it. Paste it into Word, PowerPoint or Excel: it shows as a picture. Later, copy that picture there and paste it here (⌘V) to get the editable structure back."));
     if cfg!(windows) {
         ui.label("On Windows, Word, PowerPoint and Excel paste it as a Formula Structure object. Double-click the object to edit it here; closing this window (or Save) puts the changes back into the document or slide. Their Insert ▸ Object also lists Formula Structure.");
         ui.label("LibreOffice (Writer, Calc, Impress, Draw) pastes a picture whenever the copy includes one, while Word needs the picture to paste an object. So for LibreOffice use Edit ▸ Copy for LibreOffice (Ctrl+Shift+C), or turn on Edit ▸ Copy for LibreOffice by Default; the normal Copy is for Word and other programs. In LibreOffice, Paste Special ▸ Formula Structure also works after a normal Copy.");

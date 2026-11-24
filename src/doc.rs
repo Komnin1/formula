@@ -142,6 +142,18 @@ pub struct Atom {
     /// of the sequence's end caps: drawn as a coloured shape with its code.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub monomer: Option<Box<Monomer>>,
+    /// Size relative to the document style (1: as set): a structure scaled with Object ▸ Scale
+    /// or the selection's corners draws its labels, bond widths and spacing this much larger.
+    #[serde(default = "one", skip_serializing_if = "is_one")]
+    pub size: f32,
+}
+
+fn one() -> f32 {
+    1.0
+}
+
+fn is_one(v: &f32) -> bool {
+    (*v - 1.0).abs() < 1e-6
 }
 
 /// What a monomer of a biopolymer is, as the original's HELM editor stores it.
@@ -213,7 +225,7 @@ pub enum MonomerShape {
 
 impl Atom {
     pub fn new(pos: Pos2, el: u8) -> Self {
-        Atom { pos, el, charge: 0, isotope: 0, radical: 0, label: None, color: None, extra: None, show: false, monomer: None }
+        Atom { pos, el, charge: 0, isotope: 0, radical: 0, label: None, color: None, extra: None, show: false, monomer: None, size: 1.0 }
     }
 
     /// A label that only names one element and its hydrogens ("CH3", "H3C", "CH2", "NH2",

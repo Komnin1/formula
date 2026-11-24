@@ -345,6 +345,8 @@ struct Reader {
     groups: Vec<BracketGroupRec>,
     /// Ids of the file's fonts with serifs.
     serif_fonts: Vec<u16>,
+    /// Font size (pt) of each atom label read from a binary file, to find scaled structures.
+    label_pt: Vec<(usize, f32)>,
 }
 
 pub fn read_cdx(buf: &[u8]) -> Result<Doc, String> {
@@ -456,6 +458,9 @@ impl Reader {
         };
         a.color = n.int(P_FGCOLOR).and_then(|i| color_from_index(&self.fx.colors, i));
         let label_text = n.children.iter().find(|c| c.tag == T_TEXT).and_then(|t| t.prop(P_TEXT)).map(|d| cdx_string(d).0);
+        if let Some(pt) = n.children.iter().find(|c| c.tag == T_TEXT).and_then(|t| t.prop(P_TEXT)).and_then(|d| cdx_string(d).1).map(|s| s.2).filter(|v| *v > 0.5) {
+            self.label_pt.push((self.doc.atoms.len(), pt));
+        }
         if ntype == 12 {
             a.el = 0;
             a.label = Some("*".into());
@@ -692,12 +697,32 @@ impl Reader {
             }
         }
         self.doc.arrows = arrows;
-        // Scale so bonds have the editor's standard length.
+        // A structure whose labels are all larger or smaller than the document's label size by
+        // the same factor was scaled as a whole (ChemDraw's Scale, or Formula's): it keeps that size.
+        let base = self.file_label_pt();
+        if base > 0.5 && !self.label_pt.is_empty() {
+            let pts: HashMap<usize, f32> = std::mem::take(&mut self.label_pt).into_iter().collect();
+            for frag in self.doc.fragments() {
+                let mut r: Vec<f32> = frag.iter().filter_map(|i| pts.get(i)).map(|p| p / base).collect();
+                if r.is_empty() || frag.iter().any(|&i| (self.doc.atoms[i].size - 1.0).abs() > 1e-4) {
+                    continue;
+                }
+                r.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                let med = r[r.len() / 2];
+                if (med - 1.0).abs() > 0.05 && r.iter().all(|x| (x - med).abs() < med * 0.03) {
+                    for &i in &frag {
+                        self.doc.atoms[i].size = med;
+                    }
+                }
+            }
+        }
+        // Scale so bonds have the editor's standard length (a scaled structure's bonds count at
+        // their unscaled length).
         let mut lens: Vec<f32> = self
             .doc
             .bonds
             .iter()
-            .map(|b| (self.doc.atoms[b.a].pos - self.doc.atoms[b.b].pos).length())
+            .map(|b| (self.doc.atoms[b.a].pos - self.doc.atoms[b.b].pos).length() * 2.0 / (self.doc.atoms[b.a].size + self.doc.atoms[b.b].size))
             .filter(|l| *l > 0.01)
             .collect();
         lens.sort_by(|a, b| a.partial_cmp(b).unwrap());
@@ -721,6 +746,18 @@ impl Reader {
 }
 
 impl Reader {
+    /// The document's label font size in points (10 if the file doesn't say).
+    fn file_label_pt(&self) -> f32 {
+        let fx = &self.fx;
+        fx.xml_doc_attrs
+            .iter()
+            .find(|(a, _)| a == "LabelSize")
+            .and_then(|(_, v)| v.trim().parse::<f32>().ok())
+            .or_else(|| fx.cdx_doc_props.iter().find(|p| p.0 == P_LABELSTYLE).filter(|p| p.1.len() >= 6).map(|p| u16::from_le_bytes([p.1[4], p.1[5]]) as f32 / 20.0))
+            .filter(|v| (2.0..=100.0).contains(v))
+            .unwrap_or(10.0)
+    }
+
     /// Drawing settings stored in the document (line widths, spacing, font sizes).
     fn read_style(&mut self, med: f32, s: f32) {
         let fx = &self.fx;
@@ -1167,6 +1204,8 @@ fn parse_arrow_note(v: &str) -> Option<(ArrowKind, ArrowStyle)> {
 }
 
 const ARROW_NOTE: &str = "FormulaArrowStyle";
+/// An atom's size relative to the document style (scaled structures), kept in CDXML for Formula.
+const ATOM_SIZE_NOTE: &str = "FormulaSize";
 
 /// Arrow properties Formula writes itself (binary): the rest of a file's arrow is kept as is.
 const ARROW_PROPS: [u16; 18] = [
@@ -1774,7 +1813,8 @@ pub fn write_cdx(doc: &Doc) -> Vec<u8> {
                 }
             }
             if let Some(text) = label_display(doc, i) {
-                let size = doc.style.label_size / cx.scale;
+                // A scaled structure's labels are written at their real size.
+                let size = doc.style.label_size * a.size / cx.scale;
                 let tid = cx.id(a.extra.as_ref().map(|e| e.text_id).filter(|i| *i != 0));
                 body.obj(T_TEXT, tid);
                 body.prop(P_POS2D, &point2d(pos2(p.x - size * 0.35, p.y + size * 0.36)));
@@ -1867,7 +1907,7 @@ pub fn write_cdx(doc: &Doc) -> Vec<u8> {
         // The same number on every save: derived from the atom's.
         let id = cx.id(Some(atom_ids[i] | 0x0100_0000));
         body.obj(T_GRAPHIC, id);
-        let size = doc.style.label_size / cx.scale;
+        let size = doc.style.label_size * a.size / cx.scale;
         let p = cx.p(a.pos);
         let s = pos2(p.x + size * 0.55, p.y - size * 0.55);
         body.prop(P_BBOX, &rect4(s.y, s.x, s.y, s.x));
@@ -2157,6 +2197,7 @@ struct XReader {
     sides: Vec<BracketSide>,
     groups: Vec<BracketGroupRec>,
     serif_fonts: Vec<u16>,
+    label_pt: Vec<(usize, f32)>,
 }
 
 impl XReader {
@@ -2230,6 +2271,12 @@ impl XReader {
         };
         a.color = self.color(n);
         let label_text = n.elements().find(|c| c.name == "t").map(|t| t.text());
+        if let Some(v) = n.attr(ATOM_SIZE_NOTE).and_then(|v| v.trim().parse::<f32>().ok()).filter(|v| *v > 0.0) {
+            a.size = v;
+        }
+        if let Some(pt) = n.elements().find(|c| c.name == "t").and_then(|t| t.elements().find(|s| s.name == "s")).and_then(|s| s.attr("size")).and_then(|v| v.parse::<f32>().ok()).filter(|v| *v > 0.5) {
+            self.label_pt.push((self.doc.atoms.len(), pt));
+        }
         if ntype == "ExternalConnectionPoint" {
             a.el = 0;
             a.label = Some("*".into());
@@ -2442,6 +2489,7 @@ impl XReader {
             sides: self.sides,
             groups: self.groups,
             serif_fonts: self.serif_fonts,
+            label_pt: self.label_pt,
             ..Default::default()
         };
         r.finish_common()
@@ -2585,10 +2633,14 @@ pub fn write_cdxml(doc: &Doc) -> String {
                 n.attrs.push(("color".into(), ci.to_string()));
             }
             if let Some(e) = &a.extra {
-                n.attrs.extend(clean_attrs(&e.xml_attrs));
+                n.attrs.extend(clean_attrs(&e.xml_attrs).filter(|(k, _)| k != ATOM_SIZE_NOTE));
+            }
+            if (a.size - 1.0).abs() > 1e-4 {
+                n.attrs.push((ATOM_SIZE_NOTE.into(), format!("{:.4}", a.size)));
             }
             if let Some(text) = label_display(doc, i) {
-                let size = doc.style.label_size / cx.scale;
+                // A scaled structure's labels are written at their real size.
+                let size = doc.style.label_size * a.size / cx.scale;
                 let tid = cx.id(a.extra.as_ref().map(|e| e.text_id).filter(|i| *i != 0));
                 let mut t = xml::el("t", vec![("id", tid.to_string()), ("p", format!("{} {}", f2(p.x - size * 0.35), f2(p.y + size * 0.36))), ("LabelJustification", "Left".into())]);
                 let mut s = xml::el("s", vec![("font", label_font.into()), ("size", f2(size)), ("face", "96".into())]);
@@ -2669,7 +2721,7 @@ pub fn write_cdxml(doc: &Doc) -> String {
             continue;
         }
         let id = cx.id(Some(atom_ids[i] | 0x0100_0000));
-        let size = doc.style.label_size / cx.scale;
+        let size = doc.style.label_size * a.size / cx.scale;
         let p = cx.p(a.pos);
         let (x, y) = (f2(p.x + size * 0.55), f2(p.y - size * 0.55));
         let mut g = xml::el(

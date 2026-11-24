@@ -46,8 +46,8 @@ The steps are in `.github/workflows/windows-installer.yml`.
 
 ## Notes
 
-- **Version:** the version number comes from `Cargo.toml` (`version = ...`, now 0.0.5), so the
-  installer is named `Formula-Setup-0.0.5.exe`. `CHANGELOG.md` lists what changed in each version.
+- **Version:** the version number comes from `Cargo.toml` (`version = ...`, now 0.0.6), so the
+  installer is named `Formula-Setup-0.0.6.exe`. `CHANGELOG.md` lists what changed in each version.
 - **Install location:** by default Formula installs for the current user only, without
   administrator rights. The first page of the installer also offers *Install for all users*.
 - **"Windows protected your PC":** the installer is not code-signed, so Windows SmartScreen may

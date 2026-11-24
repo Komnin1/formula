@@ -1,17 +1,17 @@
 # Building Formula yourself
 
 This package holds Formula's full source and the scripts that turn it into a program. The
-version is set in `Cargo.toml` (now 0.0.5); the scripts take it from there.
+version is set in `Cargo.toml` (now 0.0.6); the scripts take it from there.
 
 | You want | Build on | Run | Result |
 |---|---|---|---|
-| Mac app, Intel + Apple silicon in one | a Mac, macOS 11 or newer | `installer/macos/build-on-mac.command` | `installer/macos/Output/Formula-0.0.5.dmg` |
-| Windows, 64-bit (x64): almost all PCs | Windows 10/11 | `installer\windows\build-installer.bat` | `installer\windows\Output\Formula-Setup-0.0.5.exe` |
-| Windows, 32-bit (x86) | Windows 10/11 | `installer\windows\build-installer-x86.bat` | `installer\windows\Output\Formula-Setup-0.0.5-x86.exe` |
-| Linux .deb, x86-64 and aarch64 (Debian 12+, Ubuntu 22.04+) | any computer with Docker | `sh installer/linux/build-deb.sh` | `installer/linux/Output/formula_0.0.5_amd64.deb`, `formula_0.0.5_arm64.deb` |
+| Mac app, Intel + Apple silicon in one | a Mac, macOS 11 or newer | `installer/macos/build-on-mac.command` | `installer/macos/Output/Formula-0.0.6.dmg` |
+| Windows, 64-bit (x64): almost all PCs | Windows 10/11 | `installer\windows\build-installer.bat` | `installer\windows\Output\Formula-Setup-0.0.6.exe` |
+| Windows, 32-bit (x86) | Windows 10/11 | `installer\windows\build-installer-x86.bat` | `installer\windows\Output\Formula-Setup-0.0.6-x86.exe` |
+| Linux .deb, x86-64 and aarch64 (Debian 12+, Ubuntu 22.04+) | any computer with Docker | `sh installer/linux/build-deb.sh` | `installer/linux/Output/formula_0.0.6_amd64.deb`, `formula_0.0.6_arm64.deb` |
 
 On Debian or Ubuntu without Docker, `sh installer/linux/make-deb.sh` builds the package for
-that machine. Install it with `sudo apt install ./formula_0.0.5_amd64.deb`.
+that machine. Install it with `sudo apt install ./formula_0.0.6_amd64.deb`.
 
 The first build downloads the libraries Formula uses and takes 5–15 minutes; later builds
 take a minute or two. An internet connection is needed for the first build.
@@ -27,7 +27,7 @@ take a minute or two. An internet connection is needed for the first build.
    and Apple-silicon Macs. Finder then opens the folder with the .dmg.
 
 To check that the app holds both kinds of code:
-`lipo -info "/Volumes/Formula 0.0.5/Formula.app/Contents/MacOS/formula"` lists
+`lipo -info "/Volumes/Formula 0.0.6/Formula.app/Contents/MacOS/formula"` lists
 `x86_64 arm64`.
 
 First start: the app isn't signed with a paid Apple Developer ID, so right-click Formula in

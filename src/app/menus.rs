@@ -102,16 +102,16 @@ fn save_settings(s: &Settings) {
 
 /// A menu item with its key shown on the right.
 fn item(ui: &mut egui::Ui, label: &str, keys: &str) -> bool {
-    ui.add(egui::Button::new(label).shortcut_text(keys)).clicked()
+    ui.add(egui::Button::new(label).shortcut_text(super::keys(keys))).clicked()
 }
 
 fn item_on(ui: &mut egui::Ui, enabled: bool, label: &str, keys: &str) -> bool {
-    ui.add_enabled(enabled, egui::Button::new(label).shortcut_text(keys)).clicked()
+    ui.add_enabled(enabled, egui::Button::new(label).shortcut_text(super::keys(keys))).clicked()
 }
 
 /// A tick-able menu item.
 fn check(ui: &mut egui::Ui, on: bool, label: &str, keys: &str) -> bool {
-    ui.add(egui::Button::selectable(on, label).shortcut_text(keys)).clicked()
+    ui.add(egui::Button::selectable(on, label).shortcut_text(super::keys(keys))).clicked()
 }
 
 impl App {
@@ -463,7 +463,7 @@ impl App {
                 } else {
                     ("Copy for LibreOffice", "Only the object, no pictures: LibreOffice (Writer, Calc, Impress, Draw) pastes an object you can double-click to edit here. Word can't paste this copy; use the normal Copy for Word.")
                 };
-                if ui.add_enabled(has, egui::Button::new(label).shortcut_text("⇧⌘C")).on_hover_text(tip).clicked() {
+                if ui.add_enabled(has, egui::Button::new(label).shortcut_text(super::keys("⇧⌘C"))).on_hover_text(tip).clicked() {
                     self.copy_as(ctx, false, !self.copy_object);
                     ui.close();
                 }
@@ -707,11 +707,11 @@ impl App {
                 self.flip(false);
                 ui.close();
             }
-            if ui.add(egui::Button::new("Rotate 180° Horizontal").shortcut_text("⇧⌘H")).on_hover_text("Turn over left-to-right, keeping the stereochemistry").clicked() {
+            if ui.add(egui::Button::new("Rotate 180° Horizontal").shortcut_text(super::keys("⇧⌘H"))).on_hover_text("Turn over left-to-right, keeping the stereochemistry").clicked() {
                 self.rotate_180(true);
                 ui.close();
             }
-            if ui.add(egui::Button::new("Rotate 180° Vertical").shortcut_text("⇧⌘V")).on_hover_text("Turn over top-to-bottom, keeping the stereochemistry").clicked() {
+            if ui.add(egui::Button::new("Rotate 180° Vertical").shortcut_text(super::keys("⇧⌘V"))).on_hover_text("Turn over top-to-bottom, keeping the stereochemistry").clicked() {
                 self.rotate_180(false);
                 ui.close();
             }
@@ -907,8 +907,8 @@ impl App {
                 egui::ScrollArea::vertical().max_height(480.0).show(ui, |ui| {
                     egui::Grid::new("sc").striped(true).num_columns(2).show(ui, |ui| {
                         for (a, k) in SHORTCUTS {
-                            ui.label(*a);
-                            ui.label(egui::RichText::new(*k).monospace());
+                            ui.label(super::keys(a));
+                            ui.label(egui::RichText::new(super::keys(k)).monospace());
                             ui.end_row();
                         }
                     });

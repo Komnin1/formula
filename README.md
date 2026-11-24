@@ -4,7 +4,7 @@ A free desktop editor for chemical structures and reactions, for macOS, Windows 
 Draw molecules for papers and reports, check formulas and masses, predict NMR spectra and
 exchange files in CDX/CDXML, Molfile and SMILES — all offline.
 
-Version 0.0.5 (see [CHANGELOG.md](CHANGELOG.md)). Developed by Arkadiy Bazhin with the help
+Version 0.0.6 (see [CHANGELOG.md](CHANGELOG.md)). Developed by Arkadiy Bazhin with the help
 of CraftAnything and Claude Code.
 
 ![Formula with the ACS Document 1996 style](shots/acs.png)
@@ -40,6 +40,8 @@ yourself, see [BUILD.md](BUILD.md).
 - Keyboard hot keys for fast drawing (cheat sheet under Help): add carbonyls, wedges,
   sulfonyl groups, rings and chairs with single keys.
 - Clean Up straightens drawings; align, distribute, flip, rotate, rulers and grid.
+- Scale selected structures with Object ▸ Scale… or the corner handles: bond lengths, line
+  widths, labels and captions change together, and the size is saved in the file.
 - Group labels such as CO2Me, NHBoc or PPh3 are understood chemically, and written-out
   hydrogen counts update as bonds are added.
 - Isotope labels (¹³C, ¹⁵N, ²H/D, ¹⁸O, …) by right-click, menu or typing "13C" in a label.
@@ -108,7 +110,9 @@ yourself, see [BUILD.md](BUILD.md).
   it editable again.
 - Windows: structures paste into Word, PowerPoint, Excel and LibreOffice as editable
   objects. Double-click one to edit it in Formula; closing Formula puts the changes back.
-- Linux: copy and paste works as text (SMILES); picture copying isn't supported yet.
+- Linux: Copy puts a picture (PNG, about 300 dpi) on the clipboard under X11 and Wayland,
+  so LibreOffice and other programs paste a picture; pasting it back into Formula gives the
+  structure again.
 
 Labels use the Arial and Times New Roman fonts installed with macOS and Windows; on other
 systems Formula uses its built-in font.

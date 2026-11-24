@@ -12,6 +12,29 @@ pub fn units_per_mm(doc: &Doc) -> f32 {
     BOND_LEN / doc.style.bond_length.max(0.01) * 72.0 / 25.4
 }
 
+/// Scale the selected objects by `k` around `anchor`, keeping their proportions: positions
+/// spread out, and atom labels, bond widths and gaps, and caption text grow with them.
+pub fn scale(doc: &mut Doc, sel: &Selection, anchor: Pos2, k: f32) {
+    if !(k.is_finite() && k > 0.0) {
+        return;
+    }
+    // Captions scale as a whole box (corner and text size), the rest point by point.
+    let mut rest = sel.clone();
+    rest.captions.clear();
+    doc.transform(&rest, |p| anchor + (p - anchor) * k);
+    for &i in &sel.atoms {
+        if let Some(a) = doc.atoms.get_mut(i) {
+            a.size = (a.size * k).clamp(0.02, 50.0);
+        }
+    }
+    for &i in &sel.captions {
+        if let Some(c) = doc.captions.get_mut(i) {
+            c.pos = anchor + (c.pos - anchor) * k;
+            c.size = (c.size * k).clamp(0.5, 500.0);
+        }
+    }
+}
+
 /// One page's drawing area in drawing units (its top left corner is the origin, where the
 /// rulers start).
 pub fn page_size(doc: &Doc) -> Vec2 {

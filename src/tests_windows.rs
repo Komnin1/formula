@@ -104,7 +104,7 @@ fn windows_copy_as_editable_object_offers_no_pictures() {
     let ctx = ctx();
     let d = steroid();
     let cdxml = cdx::write_cdxml(&d);
-    let rich = clip::Rich { pdf: vec![], emf: crate::emf::to_emf(&d, &ctx, false, Some(cdxml.as_bytes())), cdxml: cdxml.clone(), object_only: true };
+    let rich = clip::Rich { pdf: vec![], emf: crate::emf::to_emf(&d, &ctx, false, Some(cdxml.as_bytes())), svg: String::new(), cdxml: cdxml.clone(), object_only: true };
     clip::write(&rich).expect("copy to the clipboard");
     let names = clip::sys_format_names();
     println!("clipboard formats: {names:?}");
@@ -132,7 +132,7 @@ fn windows_clipboard_round_trip() {
     let ctx = ctx();
     let d = steroid();
     let cdxml = cdx::write_cdxml(&d);
-    let rich = clip::Rich { pdf: vec![], emf: crate::emf::to_emf(&d, &ctx, false, Some(cdxml.as_bytes())), cdxml: cdxml.clone(), object_only: false };
+    let rich = clip::Rich { pdf: vec![], emf: crate::emf::to_emf(&d, &ctx, false, Some(cdxml.as_bytes())), svg: String::new(), cdxml: cdxml.clone(), object_only: false };
     clip::write(&rich).expect("copy to the clipboard");
     let found = clip::read_structure().expect("structure back from the clipboard");
     assert_eq!(found, Found::Cdxml(cdxml.trim().to_string()));

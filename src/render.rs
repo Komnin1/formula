@@ -193,7 +193,7 @@ fn label_parts(doc: &Doc, i: usize) -> (Vec<Part>, usize, usize) {
 /// charge written next to the symbol. Returns the centre of the dot (or of the pair).
 pub fn radical_spot(doc: &Doc, i: usize, lab: Option<&LabelLayout>) -> (Pos2, Vec2) {
     let a = &doc.atoms[i];
-    let size = doc.style.label_size;
+    let size = doc.style.label_size * a.size;
     let bonds: Vec<Vec2> = doc.neighbors(i).iter().map(|&n| (doc.atoms[n].pos - a.pos).normalized()).filter(|v| v.length() > 0.5).collect();
     let mut cands: Vec<Vec2> = Vec::new();
     let sum: Vec2 = bonds.iter().copied().fold(Vec2::ZERO, |s, v| s + v);
@@ -240,7 +240,7 @@ fn draw_radical(doc: &Doc, i: usize, lab: Option<&LabelLayout>, cv: &mut dyn Can
         return;
     }
     let (c, d) = radical_spot(doc, i, lab);
-    let r = doc.style.label_size * 0.09;
+    let r = doc.style.label_size * doc.atoms[i].size * 0.09;
     if n == 1 {
         cv.circle(c, r, Some(col), None);
     } else {
@@ -251,7 +251,8 @@ fn draw_radical(doc: &Doc, i: usize, lab: Option<&LabelLayout>, cv: &mut dyn Can
 }
 
 pub fn layout_label(doc: &Doc, i: usize, cv: &mut dyn Canvas) -> LabelLayout {
-    let size = doc.style.label_size;
+    // Scaled structures carry their own size (Object ▸ Scale, the selection's corners).
+    let size = doc.style.label_size * doc.atoms[i].size;
     let face = label_face(&doc.style);
     let (parts, s, e) = label_parts(doc, i);
     let small = size * 0.68;
@@ -490,13 +491,13 @@ pub fn draw_doc(doc: &Doc, cv: &mut dyn Canvas, opts: &RenderOpts) {
             if doc.degree(i) > 0 {
                 d = doc.free_direction(i);
             }
-            let c = a.pos + d * st.label_size * 0.55;
+            let c = a.pos + d * st.label_size * a.size * 0.55;
             let mut t = String::new();
             if a.charge.abs() > 1 {
                 t.push_str(&a.charge.abs().to_string());
             }
             t.push(if a.charge > 0 { '+' } else { '−' });
-            let sz = st.label_size * 0.75;
+            let sz = st.label_size * a.size * 0.75;
             let m = cv.measure(&t, sz, face);
             cv.text(c - m / 2.0, &t, sz, col, face);
         }
@@ -524,7 +525,23 @@ fn draw_bond(
     margin: f32,
     _opts: &RenderOpts,
 ) {
-    let st = &doc.style;
+    // A scaled structure: line widths, wedges, hashes, double-bond gaps and margins follow its
+    // size, so it keeps its proportions.
+    let k = (doc.atoms[b.a].size + doc.atoms[b.b].size) * 0.5;
+    let scaled;
+    let st = if (k - 1.0).abs() > 1e-4 {
+        let mut s = doc.style.clone();
+        s.line_width *= k;
+        s.bold_width *= k;
+        s.hash_spacing *= k;
+        s.wedge_width *= k;
+        s.margin *= k;
+        scaled = s;
+        &scaled
+    } else {
+        &doc.style
+    };
+    let margin = margin * k;
     let lw = st.line_width;
     let col = rgb(b.color, st.ink());
     let pa0 = doc.atoms[b.a].pos;
@@ -543,7 +560,7 @@ fn draw_bond(
     let pa = pa0 + dir * ca;
     let pb = pb0 - dir * cb;
     let nrm = vec2(-dir.y, dir.x);
-    let spacing = st.dbl_spacing * BOND_LEN;
+    let spacing = st.dbl_spacing * BOND_LEN * k;
     match b.order {
         2 => {
             let side = double_side(doc, bi, rings);
