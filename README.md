@@ -56,6 +56,9 @@ yourself, see [BUILD.md](BUILD.md).
 
 ![Example structures drawn in Formula, with the Document settings panel](shots/examples.png)
 
+These structures are in [examples/Examples.cdxml](examples/Examples.cdxml); open it in Formula to try
+the analysis, NMR and naming tools.
+
 ### Styles and pages
 
 - 21 built-in document styles modelled on common journal formats (ACS 1996, Wiley,
