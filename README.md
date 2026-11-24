@@ -61,14 +61,14 @@ yourself, see [BUILD.md](BUILD.md).
 
 ### Analysis
 
-- Molecular formula, exact mass, molecular weight, m/z with isotope pattern and elemental
-  analysis, for the whole drawing or the selection; paste them into the drawing as text.
-- Predicted mass spectrum ([M+H]⁺ or the ion's own charge) with isotope peaks.
+- Molecular formula, exact mass, molecular weight and elemental analysis, for the whole
+  drawing or the selection; paste them into the drawing as text.
+- Isotopic distribution of the ion, shown as an m/z list and as a predicted mass spectrum
+  with a peak table. Cations and anions (also multiply charged) are shown as drawn; neutral
+  molecules as [M+H]⁺.
 - Estimated properties: boiling and melting point, critical constants, heats of formation,
   log P, molar refractivity, polar surface area, H-bond donors/acceptors, rotatable bonds.
 - Periodic table with element data.
-
-![Analysis panel](shots/analysis.png)
 
 ### NMR prediction
 
