@@ -54,6 +54,8 @@ yourself, see [BUILD.md](BUILD.md).
 - Structure checking marks atoms with impossible valences.
 - Automatic recovery: unsaved work is kept if the program stops unexpectedly.
 
+![Example structures drawn in Formula, with the Document settings panel](shots/examples.png)
+
 ### Styles and pages
 
 - 21 built-in document styles modelled on common journal formats (ACS 1996, Wiley,
@@ -76,6 +78,8 @@ yourself, see [BUILD.md](BUILD.md).
   log P, molar refractivity, polar surface area, H-bond donors/acceptors, rotatable bonds.
 - Periodic table with element data.
 
+![Analysis panel: formula, masses and the predicted mass spectrum](shots/mass-spectrum.png)
+
 ### NMR prediction
 
 - ¹H, ¹³C, ¹⁹F, ³¹P and ¹⁵N chemical shifts, predicted offline from standard increment
@@ -87,6 +91,11 @@ yourself, see [BUILD.md](BUILD.md).
   "¹H NMR (predicted, 400 MHz, CDCl₃) δ 4.10 (q, J = 7.0 Hz, 2H), …".
 - Isotope labels (¹³C, ¹⁵N, ²H) are taken into account, including partial enrichment.
 
+<p>
+  <img src="shots/nmr-1h.png" alt="Predicted ¹H NMR spectrum with shifts shown on the structure" width="49%">
+  <img src="shots/nmr-13c.png" alt="Predicted ¹³C NMR spectrum with shifts shown on the structure" width="49%">
+</p>
+
 ### Names and structures
 
 - **Name-to-structure conversion (and vice versa).** Systematic IUPAC names are generated
@@ -94,6 +103,8 @@ yourself, see [BUILD.md](BUILD.md).
   well-known compounds (drugs, vitamins, natural products, reagents) also get their trivial
   names.
 - Paste or type SMILES, Molfile or CDXML text to get a structure; copy SMILES out.
+
+![Systematic name with stereodescriptor, pasted under the structure](shots/luciferin.png)
 
 ### Biopolymers
 
