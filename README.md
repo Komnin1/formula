@@ -37,9 +37,15 @@ yourself, see [BUILD.md](BUILD.md).
 - Shapes, brackets, text and captions with sub- and superscripts; colours; frames.
 - Templates: L- and D-amino acids, aromatics, cycloalkanes and conformers, hexoses and
   pentoses (Fischer, Haworth, chair), nucleic bases, DNA and RNA nucleotides.
-- Keyboard hot keys for fast drawing (cheat sheet under Help): add carbonyls, wedges,
-  sulfonyl groups, rings and chairs with single keys.
-- Clean Up straightens drawings; align, distribute, flip, rotate, rulers and grid.
+- Hot keys for fast structure editing: point at an atom or bond and press a key to change it
+  or grow the structure from it. For example, "2" adds a carbonyl, "o" an OH group, "n" an
+  NH₂ group, "6" a six-membered ring and "j" a cyclohexane chair. The full list is in
+  Help ▸ Hotkeys Cheat Sheet.
+- Structure clean-up (Structure ▸ Clean Up Structure): evens out the bond lengths and angles
+  of the selected structures, or of the whole drawing.
+- Aligning and distributing objects: line up structures, arrows, captions and shapes by
+  their left, right, top or bottom edges or by their centres, and space them evenly or with
+  a fixed gap. Objects can also be flipped and rotated, with rulers and a grid to help.
 - Scale selected structures with Object ▸ Scale… or the corner handles: bond lengths, line
   widths, labels and captions change together, and the size is saved in the file.
 - Group labels such as CO2Me, NHBoc or PPh3 are understood chemically, and written-out
