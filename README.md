@@ -77,8 +77,8 @@ yourself, see [BUILD.md](BUILD.md).
 - Multiplicities and coupling constants (H–H, and couplings to P, F, ¹³C, ¹⁵N and D).
 - Stick spectrum at 300–800 MHz with the solvent peak, a peak table, and shifts written next
   to the atoms; hover a peak to see its atoms.
-- Copy the peak list in journal format, e.g. "¹H NMR (400 MHz, CDCl₃) δ 4.10 (q,
-  J = 7.0 Hz, 2H), …".
+- Copy the peak list as text in the common experimental-section style (close to ACS), e.g.
+  "¹H NMR (predicted, 400 MHz, CDCl₃) δ 4.10 (q, J = 7.0 Hz, 2H), …".
 - Isotope-labelled compounds and partial enrichment are handled.
 
 ### Names and structures
