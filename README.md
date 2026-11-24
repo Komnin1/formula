@@ -118,6 +118,15 @@ the analysis, NMR and naming tools.
   structures or as HELM-style monomer circles.
 - HELM biopolymers in CDX/CDXML files open as coloured monomer shapes.
 
+<p>
+  <img src="shots/seq-protein.png" alt="Protein sequence (GSK3B) with formula, masses and amino-acid composition" width="49%">
+  <img src="shots/seq-helm.png" alt="Peptide drawn as HELM-style monomer circles" width="49%">
+</p>
+<p>
+  <img src="shots/seq-dna.png" alt="DNA sequence with formula, masses, GC content and composition" width="49%">
+  <img src="shots/seq-rna.png" alt="The same sequence transcribed to RNA" width="49%">
+</p>
+
 ### Files
 
 - **Open and save:** CDX and CDXML (.cdx, .cdxml, .ctp), Molfile V2000/V3000, SDfile,
