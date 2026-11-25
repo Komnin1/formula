@@ -11,7 +11,6 @@
   - tricyclo[3.3.1.1³,⁷]decane;
   - 8-azabicyclo[3.2.1]octane;
   - spiro[4.5]decane.
-- Cocaine: methyl 3-(benzoyloxy)-8-methyl-8-azabicyclo[3.2.1]octane-2-carboxylate. Biotin: 5-(2-oxohexahydro-1H-thieno[3,4-d]imidazol-4-yl)pentanoic acid.
 - About 50 more named ring systems, among them:
   - small rings: oxirane, azetidine;
   - seven-membered rings: azepane, benzodiazepine;
