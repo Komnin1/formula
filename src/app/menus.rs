@@ -327,17 +327,14 @@ impl App {
     pub(super) fn menus(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         ui.menu_button("File", |ui| {
             if item(ui, "New Document", "⌘N") {
-                self.new_doc();
+                self.new_window(None);
                 ui.close();
             }
             ui.menu_button("New from Stationery", |ui| {
                 for p in styles::PRESETS {
                     if ui.button(p.name).clicked() {
                         ui.close();
-                        let w = self.doc.style.show_warnings;
-                        self.new_doc();
-                        styles::apply(&mut self.doc, styles::to_style(p, w));
-                        self.status(format!("New document with the “{}” settings", p.name));
+                        self.new_window(Some(p.name));
                     }
                 }
             });
@@ -707,11 +704,11 @@ impl App {
                 self.flip(false);
                 ui.close();
             }
-            if ui.add(egui::Button::new("Rotate 180° Horizontal").shortcut_text(super::keys("⇧⌘H"))).on_hover_text("Turn over left-to-right, keeping the stereochemistry").clicked() {
+            if ui.add(egui::Button::new("Rotate 180° Horizontal").shortcut_text(super::keys("⇧⌘H"))).on_hover_text("Turn over left-to-right, keeping the stereochemistry. A selected part joined by one bond turns about that bond.").clicked() {
                 self.rotate_180(true);
                 ui.close();
             }
-            if ui.add(egui::Button::new("Rotate 180° Vertical").shortcut_text(super::keys("⇧⌘V"))).on_hover_text("Turn over top-to-bottom, keeping the stereochemistry").clicked() {
+            if ui.add(egui::Button::new("Rotate 180° Vertical").shortcut_text(super::keys("⇧⌘V"))).on_hover_text("Turn over top-to-bottom, keeping the stereochemistry. A selected part joined by one bond turns about that bond.").clicked() {
                 self.rotate_180(false);
                 ui.close();
             }

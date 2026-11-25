@@ -589,6 +589,21 @@ fn copied_structure_becomes_a_picture() {
 
 #[test]
 #[ignore]
+fn debug_bridged_templates_picture() {
+    let ctx = egui::Context::default();
+    ctx.run_ui(Default::default(), |_| {}).textures_delta.clear();
+    let cats = crate::templates::all();
+    let cyc = cats.iter().find(|c| c.name == "Cycloalkanes").unwrap();
+    for t in cyc.items.iter().filter(|t| t.name.starts_with("Norborn") || t.name == "Adamantane") {
+        let svg = crate::render::to_svg(&t.doc, &ctx, false);
+        let (w, h, px) = crate::clip::rasterize_svg(&svg).unwrap();
+        let img = image::RgbaImage::from_raw(w, h, px).unwrap();
+        img.save(std::env::temp_dir().join(format!("tpl-{}.png", t.name))).unwrap();
+    }
+}
+
+#[test]
+#[ignore]
 fn debug_scaled_drawing() {
     let mut d = formats::parse_smiles("OC(=O)c1ccc(N)cc1").unwrap();
     let b = formats::parse_smiles("OC(=O)c1ccc(N)cc1").unwrap();
@@ -598,6 +613,161 @@ fn debug_scaled_drawing() {
     let c = d.bounds_of(Some(&sel)).unwrap().left_top();
     crate::arrange::scale(&mut d, &sel, c, 1.8);
     std::fs::write("shots/tmp/scaled.cdxml", cdx::write_cdxml(&d)).unwrap();
+}
+
+#[test]
+#[ignore]
+fn debug_both_names() {
+    let mut none = 0;
+    let all: Vec<_> = crate::names::all_names().collect();
+    for (name, smi) in &all {
+        let d = formats::parse_smiles(smi).unwrap();
+        let (i, _) = crate::names::structure_names(&d);
+        if i.is_none() {
+            none += 1;
+            println!("no IUPAC: {name}  {smi}");
+        }
+    }
+    println!("{} of {} have no IUPAC name", none, all.len());
+    for smi in ["CC(=O)Oc1ccccc1C(=O)O", "Cn1cnc2c1c(=O)n(C)c(=O)n2C", "C1C2CC3CC1CC(C2)C3", "C1CC2CCC1C2", "C12C3C4C1C5C2C3C45"] {
+        println!("{smi} -> {:?}", crate::names::structure_names(&formats::parse_smiles(smi).unwrap()));
+    }
+}
+
+/// DNA and RNA drawn as HELM monomers: sugar heptagons, phosphate diamonds and base
+/// trapezoids, with the strand's formula.
+#[test]
+fn dna_and_rna_as_helm_monomers() {
+    use crate::doc::{MonomerRole, MonomerShape};
+    use crate::sequence::{SeqKind, nucleic_monomers};
+    let formula = |d: &crate::doc::Doc| {
+        let all: Vec<usize> = (0..d.atoms.len()).collect();
+        let (f, c) = chem::atoms_formula(d, &all);
+        chem::formula_string(&f, c)
+    };
+    // A lone ribonucleoside is adenosine; ApC is C19H25N8O11P.
+    assert_eq!(formula(&nucleic_monomers("A", SeqKind::Rna)), "C10H13N5O4");
+    assert_eq!(formula(&nucleic_monomers("AC", SeqKind::Rna)), "C19H25N8O11P");
+    // DNA: deoxyribose, thymine; dApT is C20H27N7O10P... checked by parts: two dR, one P, A, T.
+    let d = nucleic_monomers("ATGCATGCATGC", SeqKind::Dna);
+    let units: Vec<&crate::doc::Monomer> = d.atoms.iter().filter_map(|a| a.monomer.as_deref()).filter(|m| m.role == MonomerRole::Unit).collect();
+    assert_eq!(units.iter().filter(|m| m.symbol == "dR").count(), 12);
+    assert_eq!(units.iter().filter(|m| m.symbol == "P").count(), 11);
+    assert_eq!(units.iter().filter(|m| m.shape() == MonomerShape::Trapezoid).count(), 12);
+    assert!(units.iter().any(|m| m.shape() == MonomerShape::Heptagon) && units.iter().any(|m| m.shape() == MonomerShape::Diamond));
+    // Thymidine (one dT) is C10H14N2O5.
+    assert_eq!(formula(&nucleic_monomers("T", SeqKind::Dna)), "C10H14N2O5");
+    // It survives saving in the original's format.
+    let back = cdx::read_cdxml(&cdx::write_cdxml(&d)).unwrap();
+    assert_eq!(formula(&back), formula(&d));
+}
+
+/// A selected part joined by one bond turns about that bond; the charge sign can be moved and
+/// is kept in saved files; a ring tool held down places the ring where the mouse is.
+#[test]
+fn part_rotation_marks_and_steered_rings() {
+    use crate::doc::{RingAnchor, Selection, Stereo};
+    // Ethylbenzene-like: turn the CH2CH3 about the ring–CH2 bond.
+    let mut d = formats::parse_smiles("c1ccccc1CC").unwrap();
+    let ring_c = (0..d.atoms.len()).find(|&i| d.neighbors(i).len() == 3).unwrap();
+    let ch2 = d.neighbors(ring_c).into_iter().find(|&j| d.neighbors(j).len() == 2 && !d.bonds.iter().any(|b| (b.a == j || b.b == j) && b.order > 1)).unwrap();
+    let ch3 = d.neighbors(ch2).into_iter().find(|&j| j != ring_c).unwrap();
+    let bi = d.find_bond(ch2, ch3).unwrap();
+    d.bonds[bi].stereo = Stereo::Wedge;
+    let sel = Selection { atoms: [ch2, ch3].into(), ..Default::default() };
+    let link = crate::arrange::single_link(&d, &sel).unwrap();
+    let before = d.atoms[ch3].pos;
+    let axis = (d.atoms[ch2].pos - d.atoms[ring_c].pos).normalized();
+    crate::arrange::turn_about_bond(&mut d, &sel, link);
+    // CH2 is on the axis and stays; CH3 mirrors across it; the wedge becomes a hash.
+    let v0 = before - d.atoms[ring_c].pos;
+    let v1 = d.atoms[ch3].pos - d.atoms[ring_c].pos;
+    assert!((v0.dot(axis) - v1.dot(axis)).abs() < 1e-3);
+    assert!((v0.x * axis.y - v0.y * axis.x + (v1.x * axis.y - v1.y * axis.x)).abs() < 1e-3);
+    assert_eq!(d.bonds[bi].stereo, Stereo::Hash);
+    // A moved charge sign is saved and read back.
+    let mut d = formats::parse_smiles("C[N+](C)(C)C").unwrap();
+    let n = d.atoms.iter().position(|a| a.charge == 1).unwrap();
+    d.atoms[n].charge_off = [3.0, -2.0];
+    let back = cdx::read_cdxml(&cdx::write_cdxml(&d)).unwrap();
+    let m = back.atoms.iter().position(|a| a.charge == 1).unwrap();
+    assert!((back.atoms[m].charge_off[0] - 3.0).abs() < 0.05 && (back.atoms[m].charge_off[1] + 2.0).abs() < 0.05, "{:?}", back.atoms[m].charge_off);
+    // A benzene ring dragged from an atom faces the mouse; pulled far it hangs by a bond.
+    let mut d = formats::parse_smiles("CC").unwrap();
+    let a = 1;
+    let p = d.atoms[a].pos;
+    let (pts, hang) = d.ring_layout(6, RingAnchor::Atom(a), Some(p + egui::vec2(0.0, 30.0)));
+    assert!(hang.is_none() && (pts[0] - p).length() < 1e-3);
+    let c = pts.iter().fold(egui::Vec2::ZERO, |s, q| s + q.to_vec2()) / 6.0;
+    assert!(c.y > p.y + 5.0, "the ring lies below the atom, toward the mouse");
+    let atoms_before = d.atoms.len();
+    d.add_ring_toward(6, true, RingAnchor::Atom(a), Some(p + egui::vec2(0.0, 200.0)));
+    assert_eq!(d.atoms.len(), atoms_before + 6);
+    assert!(d.find_bond(a, atoms_before).is_some(), "joined by a new bond");
+}
+
+/// Bridged, caged and spiro systems get von Baeyer and spiro names; more fused parents are known;
+/// well-known compounds keep both the systematic and the trivial name.
+#[test]
+fn bridged_caged_and_fused_ring_names() {
+    let iupac = |smi: &str| crate::names::structure_names(&formats::parse_smiles(smi).unwrap()).0.unwrap_or_default();
+    assert_eq!(iupac("C1CC2CCC1C2"), "bicyclo[2.2.1]heptane");
+    assert_eq!(iupac("C1C2CC3CC1CC(C2)C3"), "tricyclo[3.3.1.1³,⁷]decane");
+    assert_eq!(iupac("C12C3C4C1C5C2C3C45"), "pentacyclo[4.2.0.0²,⁵.0³,⁸.0⁴,⁷]octane");
+    assert_eq!(iupac("CN1C2CCC1CC(O)C2"), "8-methyl-8-azabicyclo[3.2.1]octan-3-ol");
+    assert_eq!(iupac("CC1(C)C2CCC1(C)C(=O)C2"), "1,7,7-trimethylbicyclo[2.2.1]heptan-2-one");
+    assert_eq!(iupac("CC1=CCC2CC1C2(C)C"), "2,6,6-trimethylbicyclo[3.1.1]hept-2-ene");
+    assert_eq!(iupac("C1CN2CCN1CC2"), "1,4-diazabicyclo[2.2.2]octane");
+    assert_eq!(iupac("C1=CC2CC1C=C2"), "bicyclo[2.2.1]hepta-2,5-diene");
+    assert_eq!(iupac("C1CCC2(CC1)CCCC2"), "spiro[4.5]decane");
+    assert_eq!(iupac("C1COC2(C1)CCNCC2"), "1-oxa-8-azaspiro[4.5]decane");
+    assert_eq!(iupac("c1ccc2cc3ccccc3cc2c1"), "anthracene");
+    assert_eq!(iupac("c1ccc2c(c1)ccc1ccccc12"), "phenanthrene");
+    assert_eq!(iupac("c1ccc2c(c1)[nH]c1ccccc12"), "9H-carbazole");
+    assert_eq!(iupac("C1CO1"), "oxirane");
+    assert_eq!(iupac("O=C1CCCCCN1"), "azepan-2-one");
+    assert_eq!(iupac("COC(=O)C1C(OC(=O)c2ccccc2)CC2CCC1N2C"), "methyl 3-(benzoyloxy)-8-methyl-8-azabicyclo[3.2.1]octane-2-carboxylate");
+    assert_eq!(iupac("OC(=O)CCCCC1SCC2NC(=O)NC12"), "5-(2-oxohexahydro-1H-thieno[3,4-d]imidazol-4-yl)pentanoic acid");
+    assert!(iupac("C[C@]12CC[C@H]3[C@@H](CC=C4C[C@@H](O)CC[C@]34C)[C@@H]1CC[C@@H]2O").contains("tetradecahydro-1H-cyclopenta[a]phenanthrene-3,17-diol"));
+    // Both names for a well-known compound.
+    let (i, t) = crate::names::structure_names(&formats::parse_smiles("CC(=O)Oc1ccccc1C(=O)O").unwrap());
+    assert_eq!(crate::names::both_names(i.as_deref(), t.as_deref()).as_deref(), Some("2-(acetyloxy)benzoic acid (aspirin)"));
+}
+
+#[test]
+#[ignore]
+fn debug_bridged_names() {
+    for smi in [
+        "C1CC2CCC1C2",
+        "C1C2CC3CC1CC(C2)C3",
+        "C12C3C4C1C5C2C3C45",
+        "CN1C2CCC1CC(O)C2",
+        "CC1(C)C2CCC1(C)C(=O)C2",
+        "CC1=CCC2CC1C2(C)C",
+        "C1CN2CCC1CC2",
+        "C1CN2CCN1CC2",
+        "C1CCC2(CC1)CCCC2",
+        "C1COC2(C1)CCNCC2",
+        "C1=CC2CC1C=C2",
+        "C1CC2CCC3CCCC(C1)C23",
+        "c1ccc2cc3ccccc3cc2c1",
+        "c1ccc2c(c1)ccc1ccccc12",
+        "C[C@]12CC[C@H]3[C@@H](CC=C4C[C@@H](O)CC[C@]34C)[C@@H]1CC[C@@H]2O",
+        "c1ccc2c(c1)[nH]c1ccccc12",
+        "c1ccc2c(c1)Sc1ccccc1N2",
+        "C1CO1",
+        "O=C1CCCCCN1",
+        "CN1C(=O)CN=C(c2ccccc2)c2cc(Cl)ccc21",
+        "CN1[C@H]2CC[C@@H]1[C@H]([C@H](C2)OC(=O)c1ccccc1)C(=O)OC",
+        "c1ccc2c(c1)oc1ccccc12",
+        "c1cc2ccc3cccc4ccc(c1)c2c34",
+        "COC(=O)C1C(OC(=O)c2ccccc2)CC2CCC1N2C",
+        "OC(=O)CCCCC1SCC2NC(=O)NC12",
+        "CC(=O)OC1CCCCC1C(=O)OC",
+        "COC(=O)C1CCCCC1OC(=O)c1ccccc1",
+    ] {
+        println!("{smi} -> {:?}", crate::names::structure_names(&formats::parse_smiles(smi).unwrap()));
+    }
 }
 
 /// Shortcuts read as each system writes them: Mac symbols on macOS, Ctrl/Alt/Shift elsewhere.
@@ -1207,7 +1377,7 @@ fn mac_pasteboard_round_trip() {
     let ctx = egui::Context::default();
     ctx.run_ui(Default::default(), |_| {}).textures_delta.clear();
     let cdxml = cdx::write_cdxml(&d);
-    let rich = crate::clip::Rich { pdf: crate::export::to_pdf_with_data(&d, &ctx, false, Some(&cdxml)), emf: vec![], cdxml: cdxml.clone(), object_only: false };
+    let rich = crate::clip::Rich { pdf: crate::export::to_pdf_with_data(&d, &ctx, false, Some(&cdxml)), emf: vec![], svg: String::new(), cdxml: cdxml.clone(), object_only: false };
     crate::clip::sys::write_to(&pb, &rich).unwrap();
     let f = crate::clip::sys::read_from(&pb).unwrap();
     assert_eq!(f.to_doc().unwrap().atoms.len(), 11);
@@ -1243,13 +1413,26 @@ fn unsaved_drawing_survives_an_unexpected_stop() {
     unsafe { std::env::set_var("FORMULA_DATA_DIR", &dir) };
     let d = crate::formats::parse_smiles("CC12CCC3C(CCC4=CC(=O)CCC34C)C1CCC2O").unwrap();
     crate::recover::save(&d).unwrap();
+    // This window's own copy is never offered to itself (other open windows have their own).
+    assert!(crate::recover::pending().is_none());
+    // A copy left by a window that stopped (no recent heartbeat) is offered.
+    let mine = dir.join(format!("Recovered drawing {}.cdxml", std::process::id()));
+    let gone = dir.join("Recovered drawing 1.cdxml");
+    std::fs::copy(&mine, &gone).unwrap();
     let (f, t) = crate::recover::pending().expect("a recovery copy is left behind");
+    assert_eq!(f, gone);
+    // While that window is still running (it keeps touching its heartbeat) it isn't offered.
+    std::fs::write(dir.join("Window 1.alive"), b"").unwrap();
+    assert!(crate::recover::pending().is_none(), "a running window's copy is left alone");
+    std::fs::remove_file(dir.join("Window 1.alive")).unwrap();
     let back = crate::app::read_any(&f).unwrap();
     assert_eq!(back.atoms.len(), d.atoms.len());
     assert_eq!(back.bonds.len(), d.bonds.len());
     assert!(crate::recover::ago(t).contains("less than a minute"));
-    crate::recover::clear();
-    assert!(crate::recover::pending().is_none(), "a normal close removes the copy");
+    crate::recover::remove(&f);
+    crate::recover::goodbye();
+    assert!(crate::recover::pending().is_none(), "restored or discarded copies are removed");
+    assert!(!mine.exists(), "a normal close removes this window's copy");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

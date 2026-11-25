@@ -15,6 +15,41 @@ To release a new version:
 
 ## Not yet released
 
+## 0.0.7 — 2026-11-24
+
+Source package: `dist/Formula-0.0.7-source.zip` (see `BUILD.md`).
+
+- File ▸ New, New from Stationery, the New button and ⌘N / Ctrl+N open the new document in a new window. The drawing you were working on stays open in its own window, saved or not, and an unchanged window gets a new one too.
+  - Any number of windows can be open at once.
+  - Each window keeps its own recovery copy. After a crash, only the drawings of windows that are no longer running are offered back.
+
+- Cocaine and biotin get their systematic names:
+  - cocaine: methyl 3-(benzoyloxy)-8-methyl-8-azabicyclo[3.2.1]octane-2-carboxylate. With several esters, the one with the smallest alcohol part is named as the ester and the rest become prefixes;
+  - biotin: 5-(2-oxohexahydro-1H-thieno[3,4-d]imidazol-4-yl)pentanoic acid. Thieno[3,4-d]imidazole is a new named ring system, and a fully saturated ring system is written "hexahydro" without locants.
+- Templates: norbornane, the new norbornene and adamantane are drawn in perspective, traced from the person's drawings. A bond that passes behind another is broken where they cross. At a sharp corner the inner line of a ring double bond stops short instead of running past it.
+
+- Names: the systematic (IUPAC) name is always given. A well-known compound shows both names, "2-(acetyloxy)benzoic acid (aspirin)", with separate *IUPAC name* and *Trivial name* rows in Analysis.
+- Bridged, caged and spiro ring systems are named and read back:
+  - von Baeyer names: bicyclo[2.2.1]heptane, tricyclo[3.3.1.1³,⁷]decane (adamantane), pentacyclo[4.2.0.0²,⁵.0³,⁸.0⁴,⁷]octane (cubane);
+  - with heteroatoms: 8-methyl-8-azabicyclo[3.2.1]octan-3-ol (tropine), 1,4-diazabicyclo[2.2.2]octane, the penicillin and scopolamine cores;
+  - with ring double bonds: 2,6,6-trimethylbicyclo[3.1.1]hept-2-ene (α-pinene), 1,8-diazabicyclo[5.4.0]undec-7-ene (DBU);
+  - spiro compounds: spiro[4.5]decane, 1-oxa-8-azaspiro[4.5]decane.
+  The Name ▸ Structure box reads these names too, written with superscripts or as "1(3,7)", "1^3,7" or "1~3,7~".
+- More named ring systems:
+  - small rings: oxirane, aziridine, oxetane, azetidine;
+  - seven-membered rings: azepane, azepin-2-one (caprolactam), 1,4-diazepane;
+  - fused systems: benzodiazepine, naphthyridines, pteridine, benzodioxole, azulene;
+  - three rings: anthracene, phenanthrene, acridine, xanthene, phenothiazine, phenoxazine, phenazine, carbazole, fluorene, dibenzofuran;
+  - four rings: the steroid skeleton (cyclopenta[a]phenanthrene, numbered as steroids are), pyrene, chrysene, tetracene.
+  Hydro prefixes go past ten ("tetradecahydro").
+- Rotate 180° (⇧⌘H / ⇧⌘V, Ctrl+Shift+H/V) on part of a structure: a selected part joined to the rest by one bond turns 180° about that bond's axis. Wedges and hashes swap, so the stereochemistry is kept. A whole structure turns as before.
+- Charge signs and isotope numbers can be moved with the selection tools: drag the +, − or mass number off a bond. Double-click it to put it back. The position is kept in .cdxml files and when scaling.
+- Ring tools: press and hold on empty space, an atom or a bond and a preview ring follows the mouse; releasing adds it.
+  - On an atom, the ring turns around the atom to face the mouse. Pulled further than the ring is wide, it hangs from the atom by a new bond (a phenyl group).
+  - On a bond, it goes on the mouse's side.
+  - Works for every ring size, and a plain click works as before.
+- Sequence: DNA and RNA can be drawn as HELM monomers (Draw as Monomers). Sugars (R ribose or dR deoxyribose) are heptagons, phosphates (P) are diamonds and bases are trapezoids. The formula is the strand's, and the drawing saves in ChemDraw's monomer format.
+
 ## 0.0.6 — 2026-11-23
 
 Source package: `dist/Formula-0.0.6-source.zip` (see `BUILD.md`).

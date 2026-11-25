@@ -32,7 +32,7 @@ fn build_all() -> Vec<Category> {
         Category { name: "D-Amino Acids", items: d_amino_acids() },
         Category { name: "Aromatics", items: smiles_list(AROMATICS) },
         Category { name: "Conformers", items: conformers() },
-        Category { name: "Cycloalkanes", items: smiles_list(CYCLOALKANES) },
+        Category { name: "Cycloalkanes", items: cycloalkanes() },
         Category { name: "DNA Templates", items: nucleotides(true) },
         Category { name: "Hexoses", items: hexoses() },
         Category { name: "Nucleic Bases", items: smiles_list(BASES) },
@@ -224,9 +224,39 @@ const CYCLOALKANES: &[(&str, &str, &str)] = &[
     ("Cycloheptane", "Cycloheptane", "C1CCCCCC1"),
     ("Cyclooctane", "Cyclooctane", "C1CCCCCCC1"),
     ("Decalin", "Decahydronaphthalene", "C1CCC2CCCCC2C1"),
-    ("Norbornane", "Bicyclo[2.2.1]heptane", "C1CC2CCC1C2"),
-    ("Adamantane", "Adamantane", "C1C2CC3CC1CC(C2)C3"),
 ];
+
+/// Cycloalkanes, with the bridged ones drawn in perspective as chemists draw them (traced from
+/// the person's drawings): the bridge above, the bond that runs behind broken where it passes.
+fn cycloalkanes() -> Vec<Template> {
+    let mut v = smiles_list(CYCLOALKANES);
+    // Norbornane / norbornene: C7 bridge on top, C1 behind, C4 in front.
+    let nb_pts = [(152.0, 15.0), (224.0, 145.0), (88.0, 180.0), (15.0, 303.0), (152.0, 268.0), (292.0, 305.0), (362.0, 180.0)];
+    let nb_bonds = |c2c3: u8| vec![(0, 1, 1), (0, 4, 1), (1, 2, 1), (2, 3, c2c3), (3, 4, 1), (4, 5, 1), (5, 6, 1), (6, 1, 1)];
+    v.push(Template { name: "Norbornane".into(), about: "Bicyclo[2.2.1]heptane".into(), doc: drawn(&nb_pts, &nb_bonds(1)) });
+    v.push(Template { name: "Norbornene".into(), about: "Bicyclo[2.2.1]hept-2-ene".into(), doc: drawn(&nb_pts, &nb_bonds(2)) });
+    // Adamantane: three chairs seen from the side.
+    let ad_pts = [(192.0, 38.0), (93.0, 66.0), (292.0, 66.0), (140.0, 127.0), (93.0, 168.0), (292.0, 168.0), (192.0, 197.0), (40.0, 260.0), (140.0, 230.0), (240.0, 258.0)];
+    let ad_bonds = [(1, 0, 1), (0, 2, 1), (0, 3, 1), (1, 4, 1), (2, 5, 1), (3, 8, 1), (4, 6, 1), (6, 5, 1), (4, 7, 1), (7, 8, 1), (8, 9, 1), (9, 5, 1)];
+    v.push(Template { name: "Adamantane".into(), about: "Tricyclo[3.3.1.1³,⁷]decane".into(), doc: drawn(&ad_pts, &ad_bonds) });
+    v
+}
+
+/// A carbon skeleton from picture coordinates (y down), scaled to the standard bond length.
+fn drawn(pts: &[(f32, f32)], bonds: &[(usize, usize, u8)]) -> crate::doc::Doc {
+    use crate::doc::*;
+    let mut lens: Vec<f32> = bonds.iter().map(|&(a, b, _)| ((pts[a].0 - pts[b].0).powi(2) + (pts[a].1 - pts[b].1).powi(2)).sqrt()).collect();
+    lens.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let k = BOND_LEN / lens[lens.len() / 2];
+    let mut d = Doc::default();
+    for &(x, y) in pts {
+        d.atoms.push(Atom::new(egui::pos2(x * k, y * k), crate::elements::C));
+    }
+    for &(a, b, o) in bonds {
+        d.add_bond(a, b, o, Stereo::None);
+    }
+    d
+}
 
 fn smiles_list(list: &[(&str, &str, &str)]) -> Vec<Template> {
     list.iter()

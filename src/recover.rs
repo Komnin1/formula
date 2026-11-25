@@ -22,8 +22,38 @@ pub fn data_dir() -> Option<PathBuf> {
     Some(dir)
 }
 
+/// Each window (a program of its own) keeps its own recovery copy, named by its process.
 fn recovery_file() -> Option<PathBuf> {
-    Some(data_dir()?.join("Recovered drawing.cdxml"))
+    Some(data_dir()?.join(format!("Recovered drawing {}.cdxml", std::process::id())))
+}
+
+/// A running window touches this file every few seconds, so other windows know its recovery
+/// copy is still in use and don't offer it back.
+fn alive_file(pid: u32) -> Option<PathBuf> {
+    Some(data_dir()?.join(format!("Window {}.alive", pid)))
+}
+
+/// "I'm still running" (called every few seconds by each window).
+pub fn heartbeat() {
+    if let Some(f) = alive_file(std::process::id()) {
+        if let Some(d) = f.parent() {
+            let _ = std::fs::create_dir_all(d);
+        }
+        let _ = std::fs::write(f, b"");
+    }
+}
+
+/// The window is closing normally.
+pub fn goodbye() {
+    clear();
+    if let Some(f) = alive_file(std::process::id()) {
+        let _ = std::fs::remove_file(f);
+    }
+}
+
+/// Remove a recovery copy that has been restored or discarded.
+pub fn remove(f: &std::path::Path) {
+    let _ = std::fs::remove_file(f);
 }
 
 pub fn crash_dir() -> Option<PathBuf> {
@@ -49,11 +79,34 @@ pub fn clear() {
     }
 }
 
-/// A recovery copy left by a run that didn't close normally, and when it was written.
+/// A recovery copy left by a window that didn't close normally (not one of the windows still
+/// open), and when it was written. The newest one if there are several.
 pub fn pending() -> Option<(PathBuf, SystemTime)> {
-    let f = recovery_file()?;
-    let t = std::fs::metadata(&f).ok()?.modified().ok()?;
-    Some((f, t))
+    let dir = data_dir()?;
+    let me = std::process::id();
+    let now = SystemTime::now();
+    std::fs::read_dir(&dir)
+        .ok()?
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().to_string();
+            let rest = name.strip_prefix("Recovered drawing")?.strip_suffix(".cdxml")?;
+            if rest.ends_with(".tmp") {
+                return None;
+            }
+            // The older single copy has no number; a numbered one belongs to that window.
+            if let Ok(pid) = rest.trim().parse::<u32>() {
+                if pid == me {
+                    return None;
+                }
+                let alive = alive_file(pid).and_then(|f| std::fs::metadata(f).ok()).and_then(|m| m.modified().ok());
+                if alive.is_some_and(|t| now.duration_since(t).map(|d| d.as_secs() < 30).unwrap_or(true)) {
+                    return None;
+                }
+            }
+            Some((e.path(), e.metadata().ok()?.modified().ok()?))
+        })
+        .max_by_key(|x| x.1)
 }
 
 /// The newest crash log written after `since`.

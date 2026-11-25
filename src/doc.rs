@@ -146,6 +146,23 @@ pub struct Atom {
     /// or the selection's corners draws its labels, bond widths and spacing this much larger.
     #[serde(default = "one", skip_serializing_if = "is_one")]
     pub size: f32,
+    /// How far the charge sign was dragged from its usual place (drawing units).
+    #[serde(default, skip_serializing_if = "is_zero2")]
+    pub charge_off: [f32; 2],
+    /// How far the isotope number was dragged from its usual place.
+    #[serde(default, skip_serializing_if = "is_zero2")]
+    pub iso_off: [f32; 2],
+}
+
+fn is_zero2(v: &[f32; 2]) -> bool {
+    v[0] == 0.0 && v[1] == 0.0
+}
+
+/// A mark written beside an atom's symbol that can be dragged on its own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AtomMark {
+    Charge,
+    Isotope,
 }
 
 fn one() -> f32 {
@@ -225,7 +242,7 @@ pub enum MonomerShape {
 
 impl Atom {
     pub fn new(pos: Pos2, el: u8) -> Self {
-        Atom { pos, el, charge: 0, isotope: 0, radical: 0, label: None, color: None, extra: None, show: false, monomer: None, size: 1.0 }
+        Atom { pos, el, charge: 0, isotope: 0, radical: 0, label: None, color: None, extra: None, show: false, monomer: None, size: 1.0, charge_off: [0.0; 2], iso_off: [0.0; 2] }
     }
 
     /// A label that only names one element and its hydrogens ("CH3", "H3C", "CH2", "NH2",
@@ -1072,38 +1089,60 @@ impl Doc {
 
     /// Add a ring of `n` atoms (aromatic for benzene-like templates) attached by a click.
     pub fn add_ring(&mut self, n: usize, aromatic: bool, at: RingAnchor) -> Vec<usize> {
+        self.add_ring_toward(n, aromatic, at, None)
+    }
+
+    /// Where a new ring's atoms go. `toward`: the mouse while the button is held, which steers
+    /// it: in empty space the ring follows it; on an atom the ring turns about that atom to
+    /// face it (and, pulled further than the ring is wide, hangs from the atom by a new bond);
+    /// on a bond it goes to the mouse's side. Returns the ring's points and, when it hangs by
+    /// a bond, the atom it hangs from.
+    pub fn ring_layout(&self, n: usize, at: RingAnchor, toward: Option<Pos2>) -> (Vec<Pos2>, Option<usize>) {
         use std::f32::consts::PI;
         let l = BOND_LEN;
         let r = l / (2.0 * (PI / n as f32).sin());
         let apothem = l / (2.0 * (PI / n as f32).tan());
         let step = 2.0 * PI / n as f32;
         let mut pts = Vec::with_capacity(n);
+        let mut hang = None;
         match at {
             RingAnchor::Point(c) => {
-                let start = -PI / 2.0 + if n % 2 == 1 { 0.0 } else { 0.0 };
+                // Even rings: flat sides left/right (pointy top) like the usual hexagon.
+                let c = toward.unwrap_or(c);
+                let start = -PI / 2.0;
                 for k in 0..n {
                     let a = start + step * k as f32;
                     pts.push(c + vec2(a.cos(), a.sin()) * r);
                 }
-                // Even rings: flat sides left/right (pointy top) like the usual hexagon.
             }
             RingAnchor::Atom(i) => {
                 let p = self.atoms[i].pos;
                 let nbrs = self.neighbors(i);
-                let dir = match nbrs.len() {
+                let usual = match nbrs.len() {
                     0 => vec2(0.0, -1.0),
                     // At the end of a bond the ring continues straight on, so the line
                     // through the bond cuts the ring into two mirror halves.
                     1 => (p - self.atoms[nbrs[0]].pos).normalized(),
                     _ => self.free_direction(i),
                 };
-                let c = p + dir * r;
-                let a0 = angle_of(p - c);
+                let (dir, far) = match toward {
+                    Some(t) if (t - p).length() > l * 0.3 => ((t - p).normalized(), (t - p).length() > 2.0 * r + l * 0.6),
+                    _ => (usual, false),
+                };
+                // Pulled well away: the ring hangs from the atom by a bond (a phenyl group).
+                let base = if far {
+                    hang = Some(i);
+                    p + dir * l
+                } else {
+                    p
+                };
+                let c = base + dir * r;
+                let a0 = angle_of(base - c);
                 for k in 0..n {
                     let a = a0 + step * k as f32;
                     pts.push(c + vec2(a.cos(), a.sin()) * r);
                 }
-                pts[0] = p;
+                pts[0] = base;
             }
             RingAnchor::Bond(bi) => {
                 let (ia, ib) = (self.bonds[bi].a, self.bonds[bi].b);
@@ -1111,15 +1150,25 @@ impl Doc {
                 let pb = self.atoms[ib].pos;
                 let mid = pa + (pb - pa) * 0.5;
                 let mut nrm = rot((pb - pa).normalized(), PI / 2.0);
-                // Put the ring on the side with fewer atoms.
-                let mut side = 0.0;
-                for k in self.neighbors(ia).into_iter().chain(self.neighbors(ib)) {
-                    if k != ia && k != ib {
-                        side += (self.atoms[k].pos - mid).dot(nrm);
+                match toward {
+                    // The side the mouse is on.
+                    Some(t) if (t - mid).dot(nrm).abs() > l * 0.1 => {
+                        if (t - mid).dot(nrm) < 0.0 {
+                            nrm = -nrm;
+                        }
                     }
-                }
-                if side > 0.0 {
-                    nrm = -nrm;
+                    _ => {
+                        // Put the ring on the side with fewer atoms.
+                        let mut side = 0.0;
+                        for k in self.neighbors(ia).into_iter().chain(self.neighbors(ib)) {
+                            if k != ia && k != ib {
+                                side += (self.atoms[k].pos - mid).dot(nrm);
+                            }
+                        }
+                        if side > 0.0 {
+                            nrm = -nrm;
+                        }
+                    }
                 }
                 let c = mid + nrm * apothem;
                 let a0 = angle_of(pa - c);
@@ -1134,7 +1183,16 @@ impl Doc {
                 pts[1] = pb;
             }
         }
+        (pts, hang)
+    }
+
+    /// `add_ring`, steered by the mouse (see `ring_layout`).
+    pub fn add_ring_toward(&mut self, n: usize, aromatic: bool, at: RingAnchor, toward: Option<Pos2>) -> Vec<usize> {
+        let (pts, hang) = self.ring_layout(n, at, toward);
         let idx: Vec<usize> = pts.iter().map(|p| self.atom_or_new(*p)).collect();
+        if let Some(h) = hang {
+            self.add_bond(h, idx[0], 1, Stereo::None);
+        }
         let mut ring_bonds = Vec::new();
         for k in 0..n {
             let a = idx[k];

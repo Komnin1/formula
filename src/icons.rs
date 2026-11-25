@@ -58,7 +58,7 @@ impl Tool {
             Tool::Text => "Click an atom to type its label (e.g. N, OH, CO2Me). Click empty space to add a caption.",
             Tool::Bond(..) => "Click to add a bond, drag to draw one in any direction. Click a bond to change it.",
             Tool::Chain => "Drag to draw a zig-zag carbon chain.",
-            Tool::Ring(..) => "Click empty space for a new ring, an atom for a spiro ring, or a bond to fuse a ring.",
+            Tool::Ring(..) => "Click empty space for a new ring, an atom for a spiro ring, or a bond to fuse a ring. Hold the button and move to place it; pull far from an atom to attach it by a bond.",
             Tool::Arrow => "Drag to draw an arrow. Pick the style in the toolbar above or from the list under this button.",
             Tool::Shape => "Drag to draw a shape or brackets. Pick the type in the toolbar above.",
             Tool::Charge(_) => "Click an atom to change its charge.",

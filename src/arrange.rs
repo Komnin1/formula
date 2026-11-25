@@ -25,6 +25,10 @@ pub fn scale(doc: &mut Doc, sel: &Selection, anchor: Pos2, k: f32) {
     for &i in &sel.atoms {
         if let Some(a) = doc.atoms.get_mut(i) {
             a.size = (a.size * k).clamp(0.02, 50.0);
+            for o in [&mut a.charge_off, &mut a.iso_off] {
+                o[0] *= k;
+                o[1] *= k;
+            }
         }
     }
     for &i in &sel.captions {
@@ -224,6 +228,53 @@ pub fn distribute(doc: &mut Doc, sel: &Selection, horizontal: bool, gap: Option<
 
 /// The point a selection turns around: the atom it hangs from when it is one branch of a
 /// larger structure, otherwise the middle of the selection.
+/// The one bond joining the selected atoms to the rest of their structure, if there is
+/// exactly one (and the selection holds atoms on its side only).
+pub fn single_link(doc: &Doc, sel: &Selection) -> Option<usize> {
+    let mut found = None;
+    for (bi, b) in doc.bonds.iter().enumerate() {
+        if sel.atoms.contains(&b.a) != sel.atoms.contains(&b.b) {
+            if found.is_some() {
+                return None;
+            }
+            found = Some(bi);
+        }
+    }
+    found
+}
+
+/// Turn the selected part 180° in space about the σ bond `bi` that joins it to the rest:
+/// on paper it mirrors across that bond's line, and wedges and hashes swap (the part's
+/// front and back change places), so its stereochemistry is kept.
+pub fn turn_about_bond(doc: &mut Doc, sel: &Selection, bi: usize) {
+    let b = &doc.bonds[bi];
+    let (inner, outer) = if sel.atoms.contains(&b.a) { (b.a, b.b) } else { (b.b, b.a) };
+    let p0 = doc.atoms[outer].pos;
+    let d = doc.atoms[inner].pos - p0;
+    if d.length() < 1e-4 {
+        return;
+    }
+    let d = d.normalized();
+    doc.transform(sel, |p| {
+        let v = p - p0;
+        p0 + d * (2.0 * v.dot(d)) - v
+    });
+    for b in &mut doc.bonds {
+        if sel.atoms.contains(&b.a) && sel.atoms.contains(&b.b) {
+            b.dbl = match b.dbl {
+                DblPos::Left => DblPos::Right,
+                DblPos::Right => DblPos::Left,
+                x => x,
+            };
+            b.stereo = match b.stereo {
+                Stereo::Wedge => Stereo::Hash,
+                Stereo::Hash => Stereo::Wedge,
+                x => x,
+            };
+        }
+    }
+}
+
 pub fn rotation_pivot(doc: &Doc, sel: &Selection) -> Option<Pos2> {
     let mut outside: BTreeSet<usize> = BTreeSet::new();
     for b in &doc.bonds {

@@ -488,6 +488,100 @@ pub fn peptide_monomers(res: &[Residue], cyclic: bool) -> crate::doc::Doc {
     d
 }
 
+/// A DNA or RNA strand as HELM monomers, as the original's HELM editor draws it: a backbone of
+/// sugars (R ribose or dR deoxyribose, heptagons) joined by phosphates (P, diamonds), each sugar
+/// carrying its base (A, C, G, T/U, trapezoids) below. Formulas are the original's (ribose
+/// C5H7O4, deoxyribose C5H7O3, phosphate HO2P, bases without their H); the 5′ and 3′ ends carry
+/// hidden H caps, so the formula is the strand's (adenosine for a lone "A" in RNA). Long strands
+/// run back and forth in rows of ten nucleotides. Letters other than A, C, G, T and U are skipped.
+pub fn nucleic_monomers(seq: &str, kind: SeqKind) -> crate::doc::Doc {
+    use crate::doc::*;
+    use egui::{pos2, vec2};
+    let mut d = Doc::default();
+    let rna = kind == SeqKind::Rna;
+    let bases: Vec<char> = seq
+        .chars()
+        .map(|c| c.to_ascii_uppercase())
+        .filter_map(|c| match c {
+            'T' if rna => Some('U'),
+            'U' if !rna => Some('T'),
+            'A' | 'C' | 'G' | 'T' | 'U' => Some(c),
+            _ => None,
+        })
+        .collect();
+    let n = bases.len();
+    if n == 0 {
+        return d;
+    }
+    let step = BOND_LEN * 1.3;
+    let unit = |d: &mut Doc, at: egui::Pos2, symbol: &str, name: &str, analog: &str, formula: &str, branch: bool| -> usize {
+        let mut a = Atom::new(at, 0);
+        a.label = Some(symbol.to_string());
+        a.monomer = Some(Box::new(Monomer {
+            role: MonomerRole::Unit,
+            polymer: Polymer::Nucleic,
+            branch,
+            symbol: symbol.into(),
+            name: name.into(),
+            analog: analog.into(),
+            formula: formula.into(),
+        }));
+        d.atoms.push(a);
+        d.atoms.len() - 1
+    };
+    let cap = |d: &mut Doc, at: usize, dir: egui::Vec2, text: &str| {
+        let mut a = Atom::new(d.atoms[at].pos + dir * step * 0.6, 0);
+        a.label = Some(text.into());
+        a.monomer = Some(Box::new(Monomer { role: MonomerRole::Branch, polymer: Polymer::Nucleic, symbol: text.into(), ..Default::default() }));
+        d.atoms.push(a);
+        let c = d.atoms.len() - 1;
+        d.add_bond(at, c, 1, Stereo::None);
+    };
+    let (sugar, sugar_name, sugar_formula) = if rna { ("R", "Ribose", "C5H7O4") } else { ("dR", "Deoxyribose", "C5H7O3") };
+    let mut prev: Option<usize> = None;
+    let mut first = 0;
+    let mut last_dir = vec2(1.0, 0.0);
+    for (k, &b) in bases.iter().enumerate() {
+        // Each nucleotide takes two places along the row: its sugar, then the phosphate.
+        let (row, col) = (k / 10, k % 10);
+        let right = row % 2 == 0;
+        let x = |slot: f32| if right { step * slot } else { step * (19.0 - slot) };
+        let y = step * 2.8 * row as f32;
+        let s = unit(&mut d, pos2(x(2.0 * col as f32), y), sugar, sugar_name, "R", sugar_formula, false);
+        if let Some(p) = prev {
+            d.add_bond(p, s, 1, Stereo::None);
+        } else {
+            first = s;
+        }
+        let (name, formula) = match b {
+            'A' => ("Adenine", "C5H4N5"),
+            'C' => ("Cytosine", "C4H4N3O"),
+            'G' => ("Guanine", "C5H4N5O"),
+            'T' => ("Thymine", "C5H5N2O2"),
+            _ => ("Uracil", "C4H3N2O2"),
+        };
+        let code = b.to_string();
+        let base = unit(&mut d, pos2(x(2.0 * col as f32), y + step), &code, name, &code, formula, true);
+        d.add_bond(s, base, 1, Stereo::None);
+        last_dir = vec2(if right { 1.0 } else { -1.0 }, 0.0);
+        if k + 1 < n {
+            // The phosphate to the next nucleotide (at a row's end, above the next row's first
+            // sugar, so the strand turns down without crossing a base).
+            let p = unit(&mut d, pos2(x(2.0 * col as f32 + 1.0), y), "P", "Phosphate", "P", "HO2P", false);
+            d.add_bond(s, p, 1, Stereo::None);
+            prev = Some(p);
+        } else {
+            prev = Some(s);
+        }
+    }
+    // 5′-OH and 3′-OH: hidden H caps.
+    cap(&mut d, first, vec2(-1.0, 0.0), "H");
+    if let Some(l) = prev {
+        cap(&mut d, l, last_dir, "H");
+    }
+    d
+}
+
 // ---------------------------------------------------------------------------
 // FASTA files
 

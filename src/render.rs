@@ -88,6 +88,7 @@ enum PartKind {
 struct Part {
     text: String,
     kind: PartKind,
+    mark: Option<AtomMark>,
 }
 
 pub struct RenderOpts {
@@ -100,6 +101,8 @@ pub struct LabelLayout {
     pieces: Vec<(Pos2, String, f32)>, // top-left, text, size
     pub symbol_box: Rect,
     pub full_box: Rect,
+    /// Where the charge sign and isotope number are drawn (they can be dragged).
+    pub marks: Vec<(AtomMark, Rect)>,
 }
 
 pub fn shows_label(doc: &Doc, i: usize) -> bool {
@@ -133,19 +136,19 @@ fn label_parts(doc: &Doc, i: usize) -> (Vec<Part>, usize, usize) {
                     if k == anchor_tok {
                         anchor.0 = parts.len();
                     }
-                    parts.push(Part { text: t.text.clone(), kind: PartKind::Normal });
+                    parts.push(Part { text: t.text.clone(), kind: PartKind::Normal, mark: None });
                     if k == anchor_tok {
                         anchor.1 = parts.len();
                     }
                     if t.count > 1 || (t.text == ")" && t.count > 1) {
-                        parts.push(Part { text: t.count.to_string(), kind: PartKind::Sub });
+                        parts.push(Part { text: t.count.to_string(), kind: PartKind::Sub, mark: None });
                     }
                 }
                 s = anchor.0;
                 e = anchor.1;
             }
             _ => {
-                parts.push(Part { text: text.clone(), kind: PartKind::Normal });
+                parts.push(Part { text: text.clone(), kind: PartKind::Normal, mark: None });
                 s = 0;
                 e = 1;
             }
@@ -155,24 +158,24 @@ fn label_parts(doc: &Doc, i: usize) -> (Vec<Part>, usize, usize) {
         let h = if doc.style.hide_implicit_h { 0 } else { doc.implicit_h(i) };
         let h_left = attach_right && doc.degree(i) > 0;
         if a.isotope != 0 && !h_left {
-            parts.push(Part { text: a.isotope.to_string(), kind: PartKind::Sup });
+            parts.push(Part { text: a.isotope.to_string(), kind: PartKind::Sup, mark: Some(AtomMark::Isotope) });
         }
         if h_left && h > 0 {
-            parts.push(Part { text: "H".into(), kind: PartKind::Normal });
+            parts.push(Part { text: "H".into(), kind: PartKind::Normal, mark: None });
             if h > 1 {
-                parts.push(Part { text: h.to_string(), kind: PartKind::Sub });
+                parts.push(Part { text: h.to_string(), kind: PartKind::Sub, mark: None });
             }
         }
         if a.isotope != 0 && h_left {
-            parts.push(Part { text: a.isotope.to_string(), kind: PartKind::Sup });
+            parts.push(Part { text: a.isotope.to_string(), kind: PartKind::Sup, mark: Some(AtomMark::Isotope) });
         }
         s = parts.len();
-        parts.push(Part { text: sym, kind: PartKind::Normal });
+        parts.push(Part { text: sym, kind: PartKind::Normal, mark: None });
         e = parts.len();
         if !h_left && h > 0 {
-            parts.push(Part { text: "H".into(), kind: PartKind::Normal });
+            parts.push(Part { text: "H".into(), kind: PartKind::Normal, mark: None });
             if h > 1 {
-                parts.push(Part { text: h.to_string(), kind: PartKind::Sub });
+                parts.push(Part { text: h.to_string(), kind: PartKind::Sub, mark: None });
             }
         }
     }
@@ -182,7 +185,7 @@ fn label_parts(doc: &Doc, i: usize) -> (Vec<Part>, usize, usize) {
             t.push_str(&a.charge.abs().to_string());
         }
         t.push(if a.charge > 0 { '+' } else { '−' });
-        parts.push(Part { text: t, kind: PartKind::Sup });
+        parts.push(Part { text: t, kind: PartKind::Sup, mark: Some(AtomMark::Charge) });
     }
     // Radical dots are drawn apart from the text (see `draw_radical`).
     (parts, s, e)
@@ -267,6 +270,7 @@ pub fn layout_label(doc: &Doc, i: usize, cv: &mut dyn Canvas) -> LabelLayout {
     let mut x = pos.x - pre - anchor_w / 2.0;
     let top = pos.y - h * 0.5;
     let mut pieces = Vec::new();
+    let mut marks = Vec::new();
     let mut full = Rect::NOTHING;
     for (k, p) in parts.iter().enumerate() {
         let (y, sz) = match p.kind {
@@ -274,15 +278,56 @@ pub fn layout_label(doc: &Doc, i: usize, cv: &mut dyn Canvas) -> LabelLayout {
             PartKind::Sub => (top + h * 0.42, small),
             PartKind::Sup => (top - h * 0.22, small),
         };
-        pieces.push((pos2(x, y), p.text.clone(), sz));
         let hh = if p.kind == PartKind::Normal { h } else { h * 0.7 };
+        if let Some(mk) = p.mark {
+            let a = &doc.atoms[i];
+            let o = match mk {
+                AtomMark::Charge => a.charge_off,
+                AtomMark::Isotope => a.iso_off,
+            };
+            let at = pos2(x + o[0], y + o[1]);
+            pieces.push((at, p.text.clone(), sz));
+            marks.push((mk, Rect::from_min_size(pos2(at.x, at.y + hh * 0.12), vec2(widths[k], hh * 0.8))));
+            if o != [0.0, 0.0] {
+                // A dragged mark doesn't widen the label's box.
+                x += widths[k];
+                continue;
+            }
+        } else {
+            pieces.push((pos2(x, y), p.text.clone(), sz));
+        }
         full.extend_with(pos2(x, y + hh * 0.12));
         full.extend_with(pos2(x + widths[k], y + hh * 0.92));
         x += widths[k];
     }
     let cap = h * 0.36;
     let symbol_box = Rect::from_center_size(pos, vec2(anchor_w.max(size * 0.55), cap * 2.0));
-    LabelLayout { pieces, symbol_box, full_box: full }
+    LabelLayout { pieces, symbol_box, full_box: full, marks }
+}
+
+/// Where a charge on an unlabelled carbon goes before it is dragged: beside the corner,
+/// away from the bonds.
+pub fn carbon_charge_spot(doc: &Doc, i: usize) -> Pos2 {
+    let a = &doc.atoms[i];
+    let d = if doc.degree(i) > 0 { doc.free_direction(i) } else { -doc.free_direction(i) };
+    a.pos + d * doc.style.label_size * a.size * 0.55
+}
+
+/// The charge sign and isotope number of atom `i` as drawn, for picking them up.
+pub fn atom_marks(doc: &Doc, i: usize, cv: &mut dyn Canvas) -> Vec<(AtomMark, Rect)> {
+    let a = &doc.atoms[i];
+    if a.monomer.is_some() {
+        return vec![];
+    }
+    if shows_label(doc, i) {
+        return layout_label(doc, i, cv).marks;
+    }
+    if a.charge == 0 {
+        return vec![];
+    }
+    let c = carbon_charge_spot(doc, i) + vec2(a.charge_off[0], a.charge_off[1]);
+    let s = doc.style.label_size * a.size * 0.75;
+    vec![(AtomMark::Charge, Rect::from_center_size(c, vec2(s * 0.9, s * 0.9)))]
 }
 
 /// How far from the atom centre a bond should stop in direction `dir`.
@@ -446,7 +491,7 @@ pub fn draw_doc(doc: &Doc, cv: &mut dyn Canvas, opts: &RenderOpts) {
             // Bonds stop at a monomer's shape.
             Some(m) => {
                 let bx = monomer_box(m, doc.atoms[i].pos, mr);
-                Some(LabelLayout { pieces: vec![], symbol_box: bx, full_box: bx })
+                Some(LabelLayout { pieces: vec![], symbol_box: bx, full_box: bx, marks: vec![] })
             }
             None if shows_label(doc, i) => Some(layout_label(doc, i, cv)),
             None => None,
@@ -491,7 +536,8 @@ pub fn draw_doc(doc: &Doc, cv: &mut dyn Canvas, opts: &RenderOpts) {
             if doc.degree(i) > 0 {
                 d = doc.free_direction(i);
             }
-            let c = a.pos + d * st.label_size * a.size * 0.55;
+            let c = carbon_charge_spot(doc, i) + vec2(a.charge_off[0], a.charge_off[1]);
+            let _ = d;
             let mut t = String::new();
             if a.charge.abs() > 1 {
                 t.push_str(&a.charge.abs().to_string());
@@ -582,8 +628,23 @@ fn draw_bond(
                 }
                 let off = nrm * spacing * side;
                 let short = BOND_LEN * 0.12;
-                let sa = if labels[b.a].is_some() { 0.0 } else { short };
-                let sb = if labels[b.b].is_some() { 0.0 } else { short };
+                // At a sharp corner the inner line stops where it would meet the next bond's
+                // inner side, so it never pokes past it (norbornene drawn in perspective).
+                let trim = |at: usize, along: Vec2| -> f32 {
+                    let p0 = doc.atoms[at].pos;
+                    doc.neighbors(at)
+                        .into_iter()
+                        .filter(|&n| n != b.a && n != b.b)
+                        .map(|n| (doc.atoms[n].pos - p0).normalized())
+                        .filter(|v| v.dot(nrm * side) > 0.0)
+                        .map(|v| {
+                            let half = v.dot(along).clamp(-1.0, 1.0).acos() / 2.0;
+                            spacing * side.abs() / half.tan().max(0.05)
+                        })
+                        .fold(short, f32::max)
+                };
+                let sa = if labels[b.a].is_some() { 0.0 } else { trim(b.a, dir) };
+                let sb = if labels[b.b].is_some() { 0.0 } else { trim(b.b, -dir) };
                 let p1 = pa + off + dir * sa;
                 let p2 = pb + off - dir * sb;
                 if (p2 - p1).dot(dir) > 0.0 {
@@ -600,8 +661,66 @@ fn draw_bond(
             cv.line(pa + nrm * spacing, pb + nrm * spacing, lw, col);
             cv.line(pa - nrm * spacing, pb - nrm * spacing, lw, col);
         }
+        1 if b.stereo == Stereo::None => {
+            // A bond that passes behind another (bridged rings drawn in perspective) is broken
+            // where they cross.
+            let gaps = behind_crossings(doc, bi);
+            if gaps.is_empty() {
+                draw_single(b, pa, pb, cv, st, col);
+            } else {
+                let g = BOND_LEN * 0.13 * k;
+                let (s0, s1) = (ca, len - cb);
+                let mut from = s0;
+                for t in gaps {
+                    let at = t * len;
+                    if at - g > from {
+                        cv.line(pa0 + dir * from, pa0 + dir * (at - g).min(s1), lw, col);
+                    }
+                    from = from.max(at + g);
+                }
+                if from < s1 {
+                    cv.line(pa0 + dir * from, pa0 + dir * s1, lw, col);
+                }
+            }
+        }
         _ => draw_single(b, pa, pb, cv, st, col),
     }
+}
+
+/// Where bond `bi` crosses another bond it is drawn behind (fractions along it, sorted). Of
+/// two crossing bonds the steeper one is in front, as in a perspective drawing of norbornane
+/// or adamantane.
+fn behind_crossings(doc: &Doc, bi: usize) -> Vec<f32> {
+    if doc.bonds.len() > 400 {
+        return vec![];
+    }
+    let b = &doc.bonds[bi];
+    let (p, q) = (doc.atoms[b.a].pos, doc.atoms[b.b].pos);
+    let r = q - p;
+    let steep = |v: Vec2| v.y.abs() / v.length().max(1e-6);
+    let mut out = Vec::new();
+    for (oi, o) in doc.bonds.iter().enumerate() {
+        if oi == bi || o.a == b.a || o.a == b.b || o.b == b.a || o.b == b.b {
+            continue;
+        }
+        let (c, e) = (doc.atoms[o.a].pos, doc.atoms[o.b].pos);
+        let s = e - c;
+        let den = r.x * s.y - r.y * s.x;
+        if den.abs() < 1e-6 {
+            continue;
+        }
+        let t = ((c - p).x * s.y - (c - p).y * s.x) / den;
+        let u = ((c - p).x * r.y - (c - p).y * r.x) / den;
+        if !(0.05..=0.95).contains(&t) || !(0.05..=0.95).contains(&u) {
+            continue;
+        }
+        let (mine, theirs) = (steep(r), steep(s));
+        if mine < theirs || (mine == theirs && bi < oi) {
+            out.push(t);
+        }
+    }
+    out.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    out
 }
 
 fn draw_single(b: &Bond, pa: Pos2, pb: Pos2, cv: &mut dyn Canvas, st: &Style, col: Color32) {

@@ -6,6 +6,7 @@
 mod app;
 mod arrange;
 mod arrows;
+mod bridged;
 mod cdx;
 mod clip;
 mod compounds;
@@ -52,7 +53,7 @@ fn main() -> eframe::Result {
                 args.next();
                 args.next();
             }
-            "--style" | "--tab" | "--templates" => {
+            "--style" | "--tab" | "--templates" | "--stationery" => {
                 args.next();
             }
             s if ole::is_embedding_arg(s) => {}

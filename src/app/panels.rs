@@ -127,9 +127,14 @@ impl App {
         for (k, f) in a.lines.iter().enumerate() {
             ui.label(egui::RichText::new(if a.lines.len() > 1 { format!("Structure {}", k + 1) } else { "Details".into() }).strong());
             egui::Grid::new(format!("an{}", k)).num_columns(2).spacing(vec2(10.0, 4.0)).striped(true).show(ui, |ui| {
-                ui.label("Name:");
-                ui.add(egui::Label::new(f.name.clone().unwrap_or_else(|| "—".into())).wrap()).on_hover_text("Names come from a built-in list and systematic rules for simple compounds; no online service is used.");
+                ui.label("IUPAC name:");
+                ui.add(egui::Label::new(f.iupac.clone().unwrap_or_else(|| "—".into())).wrap()).on_hover_text("Systematic name worked out from the structure by the IUPAC rules; no online service is used.");
                 ui.end_row();
+                if let Some(t) = &f.trivial {
+                    ui.label("Trivial name:");
+                    ui.add(egui::Label::new(t.clone()).wrap()).on_hover_text("Usual name of a well-known compound, from the built-in list.");
+                    ui.end_row();
+                }
                 for (n, v) in [
                     ("Heavy atoms:", f.props.heavy_atoms.to_string()),
                     ("Rings:", f.props.rings.to_string()),

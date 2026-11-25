@@ -732,6 +732,12 @@ impl Reader {
         let s = BOND_LEN / med;
         let all = self.doc.select_all();
         self.doc.transform(&all, |p| pos2(p.x * s, p.y * s));
+        for a in &mut self.doc.atoms {
+            for o in [&mut a.charge_off, &mut a.iso_off] {
+                o[0] *= s;
+                o[1] *= s;
+            }
+        }
         for c in &mut self.doc.captions {
             c.size *= s;
         }
@@ -1206,6 +1212,9 @@ fn parse_arrow_note(v: &str) -> Option<(ArrowKind, ArrowStyle)> {
 const ARROW_NOTE: &str = "FormulaArrowStyle";
 /// An atom's size relative to the document style (scaled structures), kept in CDXML for Formula.
 const ATOM_SIZE_NOTE: &str = "FormulaSize";
+/// Where a dragged charge sign and isotope number sit, relative to their usual place
+/// ("charge-x charge-y isotope-x isotope-y", in points).
+const MARKS_NOTE: &str = "FormulaMarkOffsets";
 
 /// Arrow properties Formula writes itself (binary): the rest of a file's arrow is kept as is.
 const ARROW_PROPS: [u16; 18] = [
@@ -2274,6 +2283,11 @@ impl XReader {
         if let Some(v) = n.attr(ATOM_SIZE_NOTE).and_then(|v| v.trim().parse::<f32>().ok()).filter(|v| *v > 0.0) {
             a.size = v;
         }
+        let marks = nums(n.attr(MARKS_NOTE));
+        if marks.len() == 4 {
+            a.charge_off = [marks[0], marks[1]];
+            a.iso_off = [marks[2], marks[3]];
+        }
         if let Some(pt) = n.elements().find(|c| c.name == "t").and_then(|t| t.elements().find(|s| s.name == "s")).and_then(|s| s.attr("size")).and_then(|v| v.parse::<f32>().ok()).filter(|v| *v > 0.5) {
             self.label_pt.push((self.doc.atoms.len(), pt));
         }
@@ -2633,10 +2647,14 @@ pub fn write_cdxml(doc: &Doc) -> String {
                 n.attrs.push(("color".into(), ci.to_string()));
             }
             if let Some(e) = &a.extra {
-                n.attrs.extend(clean_attrs(&e.xml_attrs).filter(|(k, _)| k != ATOM_SIZE_NOTE));
+                n.attrs.extend(clean_attrs(&e.xml_attrs).filter(|(k, _)| k != ATOM_SIZE_NOTE && k != MARKS_NOTE));
             }
             if (a.size - 1.0).abs() > 1e-4 {
                 n.attrs.push((ATOM_SIZE_NOTE.into(), format!("{:.4}", a.size)));
+            }
+            if a.charge_off != [0.0; 2] || a.iso_off != [0.0; 2] {
+                let s = cx.scale;
+                n.attrs.push((MARKS_NOTE.into(), format!("{} {} {} {}", f2(a.charge_off[0] / s), f2(a.charge_off[1] / s), f2(a.iso_off[0] / s), f2(a.iso_off[1] / s))));
             }
             if let Some(text) = label_display(doc, i) {
                 // A scaled structure's labels are written at their real size.

@@ -52,6 +52,10 @@ enum Drag {
     Pan,
     /// Turning the selection with the round handle (angles in radians).
     Rotate { pivot: Pos2, start_ang: f32, orig: Box<Doc>, angle: f32 },
+    /// A ring tool held down: the ring follows the mouse and is added on release.
+    Ring { n: usize, aromatic: bool, anchor: RingAnchor, cur: Pos2 },
+    /// Moving an atom's charge sign or isotope number on its own.
+    Mark { atom: usize, mark: AtomMark, last: Pos2 },
     /// Dragging a corner of the selection box: scale about the opposite corner.
     Scale { anchor: Pos2, start: Pos2, orig: Box<Doc>, k: f32 },
 }
@@ -95,7 +99,10 @@ struct Analysis {
 
 #[derive(Default, Clone)]
 struct FragmentInfo {
+    /// IUPAC name with the trivial name in brackets ("2-acetoxybenzoic acid (aspirin)").
     name: Option<String>,
+    iupac: Option<String>,
+    trivial: Option<String>,
     formula: chem::Formula,
     charge: i32,
     exact: f64,
@@ -212,6 +219,8 @@ pub struct App {
     edit_gen: u64,
     saved_gen: u64,
     last_autosave: f64,
+    /// When this window last said it is still running (see `recover::heartbeat`).
+    last_heartbeat: f64,
     recovery_written: bool,
     /// A drawing rescued from a run that stopped unexpectedly: the copy, its time, a crash log.
     recovery_offer: Option<(PathBuf, std::time::SystemTime, Option<PathBuf>)>,
@@ -332,6 +341,7 @@ impl App {
             edit_gen: 0,
             saved_gen: 0,
             last_autosave: 0.0,
+            last_heartbeat: -100.0,
             recovery_written: false,
             recovery_offer: None,
             template: None,
@@ -425,7 +435,40 @@ impl App {
             styles::apply(&mut app.doc, styles::to_style(p, true));
             app.tab = Tab::Style;
         }
+        // A window opened by File ▸ New from Stationery in another window.
+        if let Some(p) = std::env::args().skip_while(|a| a != "--stationery").nth(1).and_then(|n| styles::find(&n)) {
+            styles::apply(&mut app.doc, styles::to_style(p, true));
+            app.status = format!("New document with the “{}” settings", p.name);
+        }
         app
+    }
+
+    /// File ▸ New: a new window with an empty drawing; this window keeps its drawing, saved
+    /// or not, and stays open even when it has no changes.
+    /// `stationery`: the settings preset to start the new drawing with.
+    fn new_window(&mut self, stationery: Option<&str>) {
+        // Always a new window (an object being edited for another program has only its own).
+        if self.embedded {
+            let w = self.doc.style.show_warnings;
+            self.new_doc();
+            if let Some(p) = stationery.and_then(styles::find) {
+                styles::apply(&mut self.doc, styles::to_style(p, w));
+                self.status(format!("New document with the “{}” settings", p.name));
+            }
+            return;
+        }
+        let started = std::env::current_exe().and_then(|exe| {
+            let mut c = std::process::Command::new(exe);
+            c.arg("--new-window");
+            if let Some(s) = stationery {
+                c.arg("--stationery").arg(s);
+            }
+            c.spawn()
+        });
+        match started {
+            Ok(_) => self.status("Opened a new document in a new window; this drawing stays here"),
+            Err(e) => self.status(format!("Could not open a new window: {}", e)),
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -1243,6 +1286,13 @@ impl App {
         if self.doc.bounds_of(Some(&sel)).is_none() {
             return;
         }
+        // A part joined to the rest by one σ bond turns 180° about that bond.
+        if let Some(bi) = arrange::single_link(&self.doc, &sel) {
+            self.checkpoint();
+            arrange::turn_about_bond(&mut self.doc, &sel, bi);
+            self.status("Rotated the selected part 180° about the bond joining it to the rest");
+            return;
+        }
         self.flip(horizontal);
         for b in &mut self.doc.bonds {
             if sel.atoms.contains(&b.a) && sel.atoms.contains(&b.b) {
@@ -1517,13 +1567,16 @@ impl App {
             let sub = self.doc.extract(&Selection { atoms: f.iter().copied().collect(), ..Default::default() });
             parts.push(chem::formula_string(&formula, charge));
             let ion = chem::ms_ion(&formula, charge);
+            let names_of = if f.len() <= 60 { names::structure_names(&sub) } else { (None, None) };
             lines.push(FragmentInfo {
                 mz: chem::isotope_pattern(&ion.formula, ion.charge),
                 ion_formula: chem::formula_string(&ion.formula, ion.charge),
                 ion_mz: ion.mz(),
                 spectrum: ion.spectrum(),
                 ion: ion.label,
-                name: if f.len() <= 60 { names::structure_to_name(&sub) } else { None },
+                iupac: names_of.0.clone(),
+                trivial: names_of.1.clone(),
+                name: names::both_names(names_of.0.as_deref(), names_of.1.as_deref()),
                 exact: chem::exact_mass(&formula, charge),
                 mw: chem::mol_weight(&formula),
                 ea: chem::elemental_analysis(&formula),
@@ -1840,7 +1893,7 @@ impl App {
                 self.close_ask = CloseAsk::Asking;
             } else if self.shot_path.is_none() && self.recovery_offer.is_none() {
                 // A normal close: the recovery copy isn't needed any more.
-                crate::recover::clear();
+                crate::recover::goodbye();
             }
         }
     }
@@ -1848,7 +1901,17 @@ impl App {
     /// Copy the drawing to the recovery file a few seconds after each change, and drop the
     /// copy once the work is saved.
     fn autosave(&mut self, ctx: &egui::Context) {
-        if self.shot_path.is_some() || self.recovery_offer.is_some() || self.embedded {
+        if self.shot_path.is_some() || self.embedded {
+            return;
+        }
+        // Other windows of the program must not offer this window's copy back.
+        let now = ctx.input(|i| i.time);
+        if now - self.last_heartbeat >= 10.0 {
+            self.last_heartbeat = now;
+            crate::recover::heartbeat();
+        }
+        ctx.request_repaint_after(std::time::Duration::from_secs(10));
+        if self.recovery_offer.is_some() {
             return;
         }
         if !self.dirty {
@@ -1900,7 +1963,8 @@ impl App {
                             self.view_initialized = false;
                             self.init_frames = 0;
                             self.edit_gen += 1;
-                            self.recovery_written = true;
+                            // This window keeps its own copy from now on.
+                            crate::recover::remove(&file);
                             self.status("Restored the drawing. Save it to keep it.");
                         }
                         Err(e) => self.status(format!("Could not restore the drawing: {}", e)),
@@ -1908,7 +1972,7 @@ impl App {
                     self.recovery_offer = None;
                 }
                 if ui.button("Discard").clicked() {
-                    crate::recover::clear();
+                    crate::recover::remove(&file);
                     self.recovery_offer = None;
                 }
                 if let Some(l) = &log {
@@ -2064,7 +2128,7 @@ impl App {
         let cmd_alt = |k: Key| key(true, false, k);
         let cmd_alt_shift = |k: Key| key(true, true, k);
         if cmd(Key::N) {
-            self.new_doc();
+            self.new_window(None);
         }
         if cmd(Key::O) {
             self.open_dialog(ctx);
@@ -2316,8 +2380,8 @@ impl App {
 
     fn toolbar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         ui.horizontal(|ui| {
-            if ui.button("New").on_hover_text(keys("New document (⌘N)")).clicked() {
-                self.new_doc();
+            if ui.button("New").on_hover_text(keys("New document in a new window (⌘N)")).clicked() {
+                self.new_window(None);
             }
             if ui.button("Open").on_hover_text(keys("Open a file (⌘O)")).clicked() {
                 self.open_dialog(ctx);
@@ -2837,6 +2901,9 @@ impl App {
             } else if let Some(pivot) = pivot {
                 self.checkpoint();
                 Some(Drag::Rotate { pivot, start_ang: angle_of(start - pivot), orig: Box::new(self.doc.clone()), angle: 0.0 })
+            } else if let Some((atom, mark)) = self.mark_at(start, ctx).filter(|_| matches!(self.tool, Tool::Lasso | Tool::Marquee)) {
+                self.checkpoint();
+                Some(Drag::Mark { atom, mark, last: start })
             } else { match self.tool {
                 Tool::Lasso | Tool::Marquee => match hit {
                     Some(h) if self.hit_selected(h) => {
@@ -2868,6 +2935,15 @@ impl App {
                 }
                 Tool::Arrow => Some(Drag::Arrow { start, cur: start }),
                 Tool::Shape => Some(Drag::Shape { start, cur: start }),
+                Tool::Ring(n, aromatic) => {
+                    let anchor = match hit {
+                        Some(Hit::Atom(i)) => RingAnchor::Atom(i),
+                        Some(Hit::Bond(b)) => RingAnchor::Bond(b),
+                        _ => RingAnchor::Point(start),
+                    };
+                    self.status("Move the mouse to place the ring; release to add it (pull far from an atom to hang it by a bond)");
+                    Some(Drag::Ring { n, aromatic, anchor, cur: start })
+                }
                 Tool::Eraser => {
                     self.checkpoint();
                     self.erase_last = None;
@@ -2910,11 +2986,24 @@ impl App {
                         *angle = a;
                         turn = Some(a);
                     }
-                    Some(Drag::Bond { cur: c, .. }) | Some(Drag::Chain { cur: c, .. }) | Some(Drag::Marquee { cur: c, .. }) | Some(Drag::Arrow { cur: c, .. }) | Some(Drag::Shape { cur: c, .. }) => *c = cur,
+                    Some(Drag::Bond { cur: c, .. }) | Some(Drag::Chain { cur: c, .. }) | Some(Drag::Marquee { cur: c, .. }) | Some(Drag::Arrow { cur: c, .. }) | Some(Drag::Shape { cur: c, .. }) | Some(Drag::Ring { cur: c, .. }) => *c = cur,
                     Some(Drag::Lasso { pts }) => {
                         if pts.last().map(|l| (*l - cur).length() > 2.0 / self.zoom).unwrap_or(true) {
                             pts.push(cur);
                         }
+                    }
+                    Some(Drag::Mark { atom, mark, last }) => {
+                        let d = cur - *last;
+                        *last = cur;
+                        if let Some(a) = self.doc.atoms.get_mut(*atom) {
+                            let o = match mark {
+                                AtomMark::Charge => &mut a.charge_off,
+                                AtomMark::Isotope => &mut a.iso_off,
+                            };
+                            o[0] += d.x;
+                            o[1] += d.y;
+                        }
+                        self.dirty = true;
                     }
                     Some(Drag::Move { last }) => {
                         let d = cur - *last;
@@ -2971,6 +3060,22 @@ impl App {
         if resp.double_clicked() {
             if let Some(p) = resp.interact_pointer_pos() {
                 let dp = self.to_doc(p);
+                // A dragged charge sign or isotope number goes back to its usual place.
+                if let Some((i, mark)) = self.mark_at(dp, ctx).filter(|_| matches!(self.tool, Tool::Lasso | Tool::Marquee)) {
+                    let a = &self.doc.atoms[i];
+                    let off = if mark == AtomMark::Charge { a.charge_off } else { a.iso_off };
+                    if off != [0.0, 0.0] {
+                        self.checkpoint();
+                        let a = &mut self.doc.atoms[i];
+                        if mark == AtomMark::Charge {
+                            a.charge_off = [0.0; 2];
+                        } else {
+                            a.iso_off = [0.0; 2];
+                        }
+                        self.status("Put back in its usual place");
+                        return;
+                    }
+                }
                 match self.doc.hit(dp, tol) {
                     Some(Hit::Atom(i)) if matches!(self.tool, Tool::Lasso | Tool::Marquee) => {
                         self.sel.clear();
@@ -3167,8 +3272,29 @@ impl App {
                 let deg = angle.to_degrees();
                 self.status(format!("Rotated {}° {}", fmt_deg(deg.abs()), if deg >= 0.0 { "clockwise" } else { "counter-clockwise" }));
             }
+            Drag::Ring { n, aromatic, anchor, cur } => {
+                self.checkpoint();
+                self.doc.add_ring_toward(n, aromatic, anchor, Some(cur));
+                self.status("Ring added");
+            }
+            Drag::Mark { mark, .. } => {
+                self.status(match mark {
+                    AtomMark::Charge => "Moved the charge sign (double-click it to put it back)",
+                    AtomMark::Isotope => "Moved the isotope number (double-click it to put it back)",
+                });
+            }
             Drag::Erase | Drag::Pan => {}
         }
+    }
+
+    /// The charge sign or isotope number under a point (drawing units), for dragging it.
+    fn mark_at(&self, p: Pos2, ctx: &egui::Context) -> Option<(usize, AtomMark)> {
+        let painter = egui::Painter::new(ctx.clone(), egui::LayerId::background(), Rect::EVERYTHING);
+        let mut cv = EguiCanvas { painter: &painter, origin: Pos2::ZERO, zoom: 1.0 };
+        let slack = 1.5 / self.zoom.max(0.01);
+        (0..self.doc.atoms.len())
+            .filter(|&i| self.doc.atoms[i].charge != 0 || self.doc.atoms[i].isotope != 0)
+            .find_map(|i| render::atom_marks(&self.doc, i, &mut cv).into_iter().find(|(_, r)| r.expand(slack).contains(p)).map(|(m, _)| (i, m)))
     }
 
     fn merge_overlaps(&mut self) {
@@ -3365,6 +3491,22 @@ impl App {
                 let r = Rect::from_two_pos(*start, *cur);
                 let s = Shape { color: Some([90, 140, 230]), label: self.new_bracket_label(), ..Shape::new(r.min, r.max, self.shape_kind) };
                 render::draw_shape(&s, cv, self.doc.style.line_width, self.doc.style.ink(), self.doc.style.label_size);
+            }
+            Some(Drag::Ring { n, aromatic, anchor, cur }) => {
+                // The ring as it will be added.
+                let (mut pts, hang) = self.doc.ring_layout(*n, *anchor, Some(*cur));
+                if let Some(h) = hang {
+                    cv.line(self.doc.atoms[h].pos, pts[0], 1.5, gray);
+                }
+                if *aromatic {
+                    let c = pts.iter().fold(Vec2::ZERO, |s, p| s + p.to_vec2()) / pts.len() as f32;
+                    let r = (pts[0] - c.to_pos2()).length();
+                    cv.circle(c.to_pos2(), r * 0.6, None, Some((1.0, gray)));
+                }
+                if let Some(f) = pts.first().copied() {
+                    pts.push(f);
+                }
+                cv.polyline(&pts, 1.5, gray);
             }
             _ => {}
         }

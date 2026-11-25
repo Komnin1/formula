@@ -4,7 +4,7 @@ A free desktop editor for chemical structures and reactions, for macOS, Windows 
 Draw molecules for papers and reports, check formulas and masses, predict NMR spectra and
 exchange files in CDX/CDXML, Molfile and SMILES — all offline.
 
-Version 0.0.6 (see [CHANGELOG.md](CHANGELOG.md)). Developed by Arkadiy Bazhin with the help
+Version 0.0.7 (see [CHANGELOG.md](CHANGELOG.md)). Developed by Arkadiy Bazhin with the help
 of CraftAnything and Claude Code.
 
 ![Formula with the ACS Document 1996 style](shots/acs.png)
@@ -32,11 +32,15 @@ yourself, see [BUILD.md](BUILD.md).
 - Single, double, triple, wedged, hashed, bold, dashed and wavy bonds; atom labels,
   charges and radicals.
 - Rings (3- to 8-membered, benzene, cyclohexane chairs) and zig-zag chains of any length.
+  Press and hold with a ring tool and a preview ring follows the mouse: on an atom it turns to
+  face the mouse (or, pulled further, hangs from the atom by a new bond); on a bond it goes on
+  the mouse's side.
 - 56 arrow styles: reaction, equilibrium (balanced and unbalanced), retrosynthetic, hollow,
   half-headed, curved (electron-pushing) and rotation arrows, plus "no-go" crosses.
 - Shapes, brackets, text and captions with sub- and superscripts; colours; frames.
 - Templates: L- and D-amino acids, aromatics, cycloalkanes and conformers, hexoses and
-  pentoses (Fischer, Haworth, chair), nucleic bases, DNA and RNA nucleotides.
+  pentoses (Fischer, Haworth, chair), nucleic bases, DNA and RNA nucleotides; norbornane,
+  norbornene and adamantane in perspective, with bonds broken where they pass behind others.
 - Hot keys for fast structure editing: point at an atom or bond and press a key to change it
   or grow the structure from it. For example, "2" adds a carbonyl, "o" an OH group, "n" an
   NH₂ group, "6" a six-membered ring and "j" a cyclohexane chair. The full list is in
@@ -46,13 +50,16 @@ yourself, see [BUILD.md](BUILD.md).
 - Aligning and distributing objects: line up structures, arrows, captions and shapes by
   their left, right, top or bottom edges or by their centres, and space them evenly or with
   a fixed gap. Objects can also be flipped and rotated, with rulers and a grid to help.
+  A selected part of a structure can be turned 180° about the bond joining it to the rest,
+  keeping its stereochemistry.
 - Scale selected structures with Object ▸ Scale… or the corner handles: bond lengths, line
   widths, labels and captions change together, and the size is saved in the file.
 - Group labels such as CO2Me, NHBoc or PPh3 are understood chemically, and written-out
   hydrogen counts update as bonds are added.
 - Isotope labels (¹³C, ¹⁵N, ²H/D, ¹⁸O, …) by right-click, menu or typing "13C" in a label.
 - Structure checking marks atoms with impossible valences.
-- Automatic recovery: unsaved work is kept if the program stops unexpectedly.
+- Several documents at once, each in its own window.
+- Automatic recovery: unsaved work in every window is kept if the program stops unexpectedly.
 
 ![Example structures drawn in Formula, with the Document settings panel](shots/examples.png)
 
@@ -102,9 +109,11 @@ the analysis, NMR and naming tools.
 ### Names and structures
 
 - **Name-to-structure conversion (and vice versa).** Systematic IUPAC names are generated
-  for most drawn structures. *R*/*S* and *E*/*Z* descriptors are supported. About 300
-  well-known compounds (drugs, vitamins, natural products, reagents) also get their trivial
-  names.
+  for most drawn structures, including bridged, caged and spiro ring systems
+  (bicyclo[2.2.1]heptane, tricyclo[3.3.1.1³,⁷]decane, spiro[4.5]decane). *R*/*S* and *E*/*Z*
+  descriptors are supported. About 300 well-known compounds (drugs, vitamins, natural
+  products, reagents) also get their trivial names, shown next to the systematic one:
+  "2-(acetyloxy)benzoic acid (aspirin)".
 - Paste or type SMILES, Molfile or CDXML text to get a structure; copy SMILES out.
 
 ![Systematic name with stereodescriptor, pasted under the structure](shots/luciferin.png)
@@ -116,6 +125,8 @@ the analysis, NMR and naming tools.
   formulas and masses.
 - Peptides with D-amino acids (lower-case letters) and cyclic peptides drawn as full
   structures or as HELM-style monomer circles.
+- DNA and RNA drawn as HELM-style monomers: sugars as heptagons, phosphates as diamonds and
+  bases as trapezoids.
 - HELM biopolymers in CDX/CDXML files open as coloured monomer shapes.
 
 <p>

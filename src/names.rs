@@ -316,6 +316,39 @@ pub fn structure_to_name(d: &Doc) -> Option<String> {
     crate::iupac::structure_to_name(&d).or_else(|| hydrocarbon_name(&d))
 }
 
+/// Both names of a structure: the systematic (IUPAC) name, always worked out from the
+/// structure, and the trivial name when it is a well-known compound ("2-acetoxybenzoic acid",
+/// "aspirin"). Either may be missing.
+pub fn structure_names(d: &Doc) -> (Option<String>, Option<String>) {
+    if d.atoms.is_empty() {
+        return (None, None);
+    }
+    let d = formats::expand_labels(d);
+    if d.fragments().len() != 1 {
+        return (None, None);
+    }
+    let n = d.atoms.len();
+    let formula = chem::atoms_formula(&d, &(0..n).collect::<Vec<_>>());
+    let trivial = known()
+        .iter()
+        .find(|(_, c)| c.atoms.len() == n && chem::atoms_formula(c, &(0..n).collect::<Vec<_>>()) == formula && same_structure(&d, c))
+        .map(|(name, _)| name.to_string());
+    let iupac = crate::iupac::structure_to_name(&d).or_else(|| hydrocarbon_name(&d));
+    // A trivial name that is the systematic name itself ("benzene", "naphthalene") is shown once.
+    let trivial = trivial.filter(|t| iupac.as_deref().is_none_or(|i| !i.eq_ignore_ascii_case(t)));
+    (iupac, trivial)
+}
+
+/// The two names as one line: "2-acetoxybenzoic acid (aspirin)".
+pub fn both_names(iupac: Option<&str>, trivial: Option<&str>) -> Option<String> {
+    match (iupac, trivial) {
+        (Some(i), Some(t)) => Some(format!("{} ({})", i, t)),
+        (Some(i), None) => Some(i.to_string()),
+        (None, Some(t)) => Some(t.to_string()),
+        (None, None) => None,
+    }
+}
+
 /// The built-in structures, read once: (name, structure). Later names for the same
 /// structure (aliases) are skipped so the first, usual name is the one given.
 fn known() -> &'static [(&'static str, Doc)] {

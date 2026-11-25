@@ -284,6 +284,11 @@ impl App {
                 if ui.button("Translate to Protein").on_hover_text("Standard genetic code, first reading frame; * marks a stop").clicked() {
                     replace = Some((sequence::translate(&clean), SeqKind::Protein, "translation".into()));
                 }
+                let r = ui.add_enabled(!clean.is_empty(), egui::Button::new("Draw as Monomers (HELM)"));
+                if r.on_hover_text("Draw the strand as HELM monomers: sugars (R or dR) joined by phosphates (P), each carrying its base").clicked() {
+                    let d = sequence::nucleic_monomers(&clean, self.seq.kind);
+                    self.insert_doc(d, if self.seq.kind == SeqKind::Rna { "Drew the RNA as monomers" } else { "Drew the DNA as monomers" });
+                }
             } else {
                 let res: Vec<sequence::Residue> = sequence::peptide_residues(&self.seq.text).into_iter().filter(|r| SeqKind::Protein.alphabet().contains(r.code)).collect();
                 let cyc = self.seq_cyclic;

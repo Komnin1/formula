@@ -25,6 +25,11 @@ pub const STEMS: [&str; 21] = [
     "heptadec", "octadec", "nonadec", "icos",
 ];
 const MULT: [&str; 11] = ["", "", "di", "tri", "tetra", "penta", "hexa", "hepta", "octa", "nona", "deca"];
+/// Multipliers up to 20, for "tetradecahydro".
+const MANY: [&str; 21] = [
+    "", "", "di", "tri", "tetra", "penta", "hexa", "hepta", "octa", "nona", "deca", "undeca", "dodeca", "trideca", "tetradeca", "pentadeca", "hexadeca",
+    "heptadeca", "octadeca", "nonadeca", "icosa",
+];
 const MULT_COMPLEX: [&str; 7] = ["", "", "bis", "tris", "tetrakis", "pentakis", "hexakis"];
 
 // ===========================================================================
@@ -1271,6 +1276,19 @@ fn ring_locants(s: &str) -> Option<Vec<String>> {
 
 /// A named ring system as the parent or as a group: (skeleton, root atom).
 fn template_compound(s: &str, yl: bool, ester: Option<&str>, depth: usize) -> Option<(GSkel, usize)> {
+    // Bridged and spiro parents: "8-azabicyclo(3.2.1)octan-3-ol", "spiro(4.5)decane".
+    for r in crate::bridged::read(s).into_iter().rev() {
+        if let Some((mut sk, root)) = template_parse(r.template, r.full, &s[..r.start], &s[r.end..], yl, ester, depth, &[]) {
+            for &(a, b) in &r.doubles {
+                for bd in sk.bonds.iter_mut() {
+                    if (bd.0 == a && bd.1 == b) || (bd.0 == b && bd.1 == a) {
+                        bd.2 = 2;
+                    }
+                }
+            }
+            return Some((sk, root));
+        }
+    }
     for t in hetero::TEMPLATES {
         // Names are read with square brackets turned into round ones ("benzo(d)thiazole").
         let full_name = t.name.replace('[', "(").replace(']', ")");
@@ -1372,7 +1390,10 @@ fn template_parse(t: &Template, full: bool, pre: &str, post: &str, yl: bool, est
     }
     let mut hydro: Vec<usize> = Vec::new();
     let mut hydro_count = 0;
-    for (k, word) in MULT.iter().enumerate().skip(2) {
+    // Longest first: "tetradecahydro" before "decahydro".
+    let mut words: Vec<(usize, &str)> = MANY.iter().copied().enumerate().skip(2).collect();
+    words.sort_by_key(|w| std::cmp::Reverse(w.1.len()));
+    for (k, word) in words {
         let hw = format!("{}hydro", word);
         if let Some(body) = rest.strip_suffix(hw.as_str()).or_else(|| rest.strip_suffix(&format!("{}-", hw))) {
             hydro_count = k;
@@ -1474,7 +1495,9 @@ fn template_parse(t: &Template, full: bool, pre: &str, post: &str, yl: bool, est
     // "tetrahydro" without locants: every remaining position that could carry a double bond.
     if hydro_count > 0 && hydro.is_empty() {
         let free: Vec<usize> = (0..n).filter(|&k| !sat[k]).collect();
-        if free.len() != hydro_count {
+        // "Hexahydro" with no locants: every position left is saturated (a C=O carbon may
+        // already be among those counted).
+        if free.len() > hydro_count || free.len() + 1 < hydro_count {
             return None;
         }
         for k in free {
@@ -1552,7 +1575,7 @@ enum SysKind {
     /// A single carbon ring, atoms in walking order.
     Carbo { order: Vec<usize>, aromatic: bool },
     /// A named ring system: the template and every allowed numbering.
-    Tpl { tpl: usize, maps: Vec<Vec<usize>> },
+    Tpl { tpl: &'static Template, maps: Vec<Vec<usize>> },
 }
 
 struct Sys {
@@ -1654,7 +1677,13 @@ impl Mol {
                 SysKind::Carbo { order, aromatic }
             } else {
                 let saturated = atoms.iter().all(|&a| ring_nbs(a).iter().all(|&b| adj[a].iter().any(|x| x.0 == b && x.1 == 1) && !aro.contains(&(a.min(b), a.max(b)))));
-                let (tpl, maps) = hetero::match_system(&atoms, &|i| el[i], &ring_nbs, saturated)?;
+                let any_aro = atoms.iter().any(|&a| ring_nbs(a).iter().any(|&b| aro.contains(&(a.min(b), a.max(b)))));
+                let (tpl, maps) = match hetero::match_system(&atoms, &|i| el[i], &ring_nbs, saturated) {
+                    Some((ti, maps)) => (&hetero::TEMPLATES[ti], maps),
+                    // Bridged, caged and spiro systems: a von Baeyer or spiro name.
+                    None if !any_aro => crate::bridged::name_system(&atoms, &|i| el[i], &ring_nbs)?,
+                    None => return None,
+                };
                 SysKind::Tpl { tpl, maps }
             };
             let si = systems.len();
@@ -1690,7 +1719,7 @@ impl Mol {
     }
     fn template(&self, s: usize) -> Option<&'static Template> {
         match &self.systems[s].kind {
-            SysKind::Tpl { tpl, .. } => Some(&hetero::TEMPLATES[*tpl]),
+            SysKind::Tpl { tpl, .. } => Some(*tpl),
             _ => None,
         }
     }
@@ -1894,7 +1923,7 @@ pub fn structure_to_name(d: &Doc) -> Option<String> {
     let groups = find_groups(&m)?;
     let principal = groups.iter().map(|g| g.kind).max();
     let desc = crate::cip::descriptors(d);
-    let namer = Namer { m: &m, groups: &groups, principal, desc: &desc };
+    let namer = Namer { m: &m, groups: &groups, principal, desc: &desc, main_ester: None };
     // Onium ions: "(4-…phenyl)triphenylphosphonium", "tetramethylammonium".
     if let Some(p) = (0..m.el.len()).find(|&i| m.chg[i] == 1 && matches!(m.el[i], 7 | 15) && m.deg(i) == 4 && m.adj[i].iter().all(|x| m.is_c(x.0))) {
         if principal.is_none() || principal == Some(Fg::Amine) || m.sys_of[p].is_none() {
@@ -1932,6 +1961,9 @@ struct Namer<'a> {
     groups: &'a [Group],
     principal: Option<Fg>,
     desc: &'a Descriptors,
+    /// With several esters: the one named as the ester ("methyl …carboxylate"); the others
+    /// become prefixes ("benzoyloxy", "methoxycarbonyl").
+    main_ester: Option<usize>,
 }
 
 /// A candidate parent: a chain (atoms in order) or a ring system.
@@ -1990,11 +2022,25 @@ impl<'a> Namer<'a> {
         let mut excluded: HashSet<usize> = HashSet::new();
         let mut ester_alkyl = None;
         if principal == Some(Fg::Ester) {
-            let esters: Vec<&Group> = self.groups.iter().filter(|g| g.kind == Fg::Ester).collect();
+            let esters: Vec<usize> = (0..self.groups.len()).filter(|&gi| self.groups[gi].kind == Fg::Ester && self.main_ester.is_none_or(|e| e == gi)).collect();
+            if esters.len() > 1 {
+                // Several esters: name the one with the smallest alcohol part as the ester
+                // (cocaine: "methyl …-3-(benzoyloxy)…-2-carboxylate").
+                let mut order: Vec<(usize, usize)> = esters
+                    .iter()
+                    .filter_map(|&gi| {
+                        let g = &self.groups[gi];
+                        let (o, r) = (g.atoms[1], g.extra?);
+                        Some((side(m, o, r, &HashSet::from([o])).len(), gi))
+                    })
+                    .collect();
+                order.sort();
+                return order.into_iter().find_map(|(_, gi)| Namer { main_ester: Some(gi), ..*self }.name());
+            }
             if esters.len() != 1 {
                 return None;
             }
-            let g = esters[0];
+            let g = &self.groups[esters[0]];
             let o = g.atoms[1];
             let r = g.extra?;
             for a in side(m, o, r, &HashSet::from([o])) {
@@ -2126,7 +2172,7 @@ impl<'a> Namer<'a> {
                 out
             }
             Some(SysKind::Tpl { tpl, maps }) => {
-                let t = &hetero::TEMPLATES[*tpl];
+                let t = *tpl;
                 maps.iter().map(|mp| (mp.clone(), t.atoms.iter().map(|a| a.1.to_string()).collect())).collect()
             }
             None => {
@@ -2151,7 +2197,7 @@ impl<'a> Namer<'a> {
         let mut consumed: HashSet<usize> = HashSet::new();
         let mut amine_ns: Vec<usize> = Vec::new();
         for (gi, g) in self.groups.iter().enumerate() {
-            if Some(g.kind) != self.principal {
+            if Some(g.kind) != self.principal || self.main_ester.is_some_and(|e| e != gi && g.kind == Fg::Ester) {
                 continue;
             }
             if set.contains(&g.c) {
@@ -2174,7 +2220,7 @@ impl<'a> Namer<'a> {
             }
         }
         if self.principal == Some(Fg::Ester) {
-            for g in self.groups.iter().filter(|g| g.kind == Fg::Ester) {
+            for (_, g) in self.groups.iter().enumerate().filter(|(gi, g)| g.kind == Fg::Ester && self.main_ester.is_none_or(|e| e == *gi)) {
                 if let Some(r) = g.extra {
                     consumed.insert(r);
                 }
@@ -2200,6 +2246,10 @@ impl<'a> Namer<'a> {
                     _ => {}
                 }
             }
+        }
+        // Bridged and spiro systems: their ring double bonds ("hept-2-ene").
+        if let Some(t) = tpl.filter(|t| crate::bridged::is_generated(t)) {
+            doubles = generated_doubles(m, t, &atoms);
         }
         // Named ring systems: indicated, added and "hydro" hydrogen.
         let (mut indicated, mut added, mut hydro) = (Vec::new(), None, Vec::new());
@@ -2721,7 +2771,7 @@ impl<'a> Namer<'a> {
     fn tpl_sub_name(&self, si: usize, b: usize, a: usize, blocked: &HashSet<usize>) -> Option<String> {
         let m = self.m;
         let SysKind::Tpl { tpl, maps } = &m.systems[si].kind else { return None };
-        let t = &hetero::TEMPLATES[*tpl];
+        let t = *tpl;
         let set: HashSet<usize> = m.systems[si].atoms.iter().copied().collect();
         let mut bl = blocked.clone();
         bl.extend(set.iter().copied());
@@ -2749,7 +2799,7 @@ impl<'a> Namer<'a> {
             let all_sat: Vec<usize> = indicated.iter().chain(hy.iter()).copied().collect();
             let base = match saturated_name(t, &all_sat, &labels) {
                 Some(nm) => format!("{}-{}-yl", hetero::stem(nm), labels[at]),
-                None => cat(&cat(&hydro_text(&hy, &labels), &indicated_text(t, &indicated, &labels)), &format!("{}-{}-yl", hetero::stem(t.name), labels[at])),
+                None => cat(&cat(&hydro_text_for(m, t, mp, &hy, &labels), &indicated_text(t, &indicated, &labels)), &format!("{}-{}-yl", hetero::stem(&ring_system_text(m, t, mp, &labels)), labels[at])),
             };
             let name = if subs.is_empty() { format!("({})", base) } else { format!("({})", cat(&assemble_list(&subs, false), &base)) };
             let name = self.with_stereo(name, mp, &labels, false);
@@ -2798,19 +2848,20 @@ impl<'a> Namer<'a> {
                 let base = if "aeiouy".contains(first) { hetero::stem(nm) } else { nm };
                 return Some(ParentText { text: format!("{}-{}-{}{}", base, plocs, mult, w), omit_prefix_locants: false });
             }
-            let mut text = hydro_text(&nb.hydro, &nb.labels);
+            let mut text = hydro_text_for(m, t, &nb.atoms, &nb.hydro, &nb.labels);
             if let Some(fp) = t.fixed_prefix {
                 text = cat(&text, fp);
             }
             text = cat(&text, &indicated_text(t, &nb.indicated, &nb.labels));
+            let tname = ring_system_text(m, t, &nb.atoms, &nb.labels);
             let Some(kind) = kind else {
-                text.push_str(t.name);
+                text = cat(&text, &tname);
                 return Some(ParentText { text, omit_prefix_locants: false });
             };
             let w = ring_word(kind)?;
             let mult = MULT[count.min(10)];
             let first = mult.chars().next().or_else(|| w.chars().next()).unwrap_or('a');
-            text.push_str(if "aeiouy".contains(first) { hetero::stem(t.name) } else { t.name });
+            text = cat(&text, if "aeiouy".contains(first) { hetero::stem(&tname) } else { &tname });
             let added = nb.added.map(|p| format!("({}H)", nb.labels[p])).unwrap_or_default();
             text.push_str(&format!("-{}{}-{}{}", plocs, added, mult, w));
             return Some(ParentText { text, omit_prefix_locants: false });
@@ -2933,6 +2984,28 @@ struct ParentText {
     omit_prefix_locants: bool,
 }
 
+/// Positions (lower locant) of the double bonds in a bridged or spiro system.
+fn generated_doubles(m: &Mol, t: &Template, atoms: &[usize]) -> Vec<usize> {
+    let mut d: Vec<usize> = t.bonds.iter().filter(|&&(i, j)| m.order(atoms[i as usize], atoms[j as usize]) == 2).map(|&(i, j)| i.min(j) as usize).collect();
+    d.sort();
+    d
+}
+
+/// A ring system's name with its double bonds: "bicyclo[3.1.1]hept-2-ene",
+/// "bicyclo[2.2.1]hepta-2,5-diene"; the template's name otherwise.
+fn ring_system_text(m: &Mol, t: &Template, atoms: &[usize], labels: &[String]) -> String {
+    if !crate::bridged::is_generated(t) {
+        return t.name.to_string();
+    }
+    let d = generated_doubles(m, t, atoms);
+    let Some(base) = t.name.strip_suffix("ane") else { return t.name.to_string() };
+    if d.is_empty() {
+        return t.name.to_string();
+    }
+    let locs = d.iter().map(|&p| labels[p].clone()).collect::<Vec<_>>().join(",");
+    if d.len() == 1 { format!("{}-{}-ene", base, locs) } else { format!("{}a-{}-{}ene", base, locs, MULT[d.len().min(10)]) }
+}
+
 /// Retained names for a ring fused to benzene whose own ring is fully saturated:
 /// (template, name, the positions that are then saturated).
 const SATURATED_NAMES: &[(&str, &str, &[&str])] = &[
@@ -2963,6 +3036,16 @@ fn cat(a: &str, b: &str) -> String {
     }
 }
 
+/// Like `hydro_text`, but a ring system drawn with no double bonds left is "hexahydro" without
+/// locants, as the original writes it ("2-oxohexahydro-1H-thieno[3,4-d]imidazol-4-yl").
+fn hydro_text_for(m: &Mol, t: &Template, atoms: &[usize], hydro: &[usize], labels: &[String]) -> String {
+    let all_single = t.bonds.iter().all(|&(i, j)| m.order(atoms[i as usize], atoms[j as usize]) == 1 && !m.is_aromatic_bond(atoms[i as usize], atoms[j as usize]));
+    if all_single && hydro.len() >= 4 {
+        return format!("{}hydro", MANY[hydro.len().min(20)]);
+    }
+    hydro_text(hydro, labels)
+}
+
 /// "4,5-dihydro" for the hydro positions of a ring system.
 fn hydro_text(hydro: &[usize], labels: &[String]) -> String {
     if hydro.is_empty() {
@@ -2970,7 +3053,7 @@ fn hydro_text(hydro: &[usize], labels: &[String]) -> String {
     }
     let mut v: Vec<&String> = hydro.iter().map(|&p| &labels[p]).collect();
     v.sort_by_key(|l| locant_key(l));
-    format!("{}-{}hydro", v.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(","), MULT[hydro.len().min(10)])
+    format!("{}-{}hydro", v.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(","), MANY[hydro.len().min(20)])
 }
 
 /// "2H-" for the indicated hydrogen of a ring system.
