@@ -1412,11 +1412,11 @@ fn unsaved_drawing_survives_an_unexpected_stop() {
     let dir = std::env::temp_dir().join(format!("formula-recover-test-{}", std::process::id()));
     unsafe { std::env::set_var("FORMULA_DATA_DIR", &dir) };
     let d = crate::formats::parse_smiles("CC12CCC3C(CCC4=CC(=O)CCC34C)C1CCC2O").unwrap();
-    crate::recover::save(&d).unwrap();
+    crate::recover::save(&d, 0).unwrap();
     // This window's own copy is never offered to itself (other open windows have their own).
     assert!(crate::recover::pending().is_none());
     // A copy left by a window that stopped (no recent heartbeat) is offered.
-    let mine = dir.join(format!("Recovered drawing {}.cdxml", std::process::id()));
+    let mine = dir.join(format!("Recovered drawing {}-0.cdxml", std::process::id()));
     let gone = dir.join("Recovered drawing 1.cdxml");
     std::fs::copy(&mine, &gone).unwrap();
     let (f, t) = crate::recover::pending().expect("a recovery copy is left behind");
@@ -1430,6 +1430,7 @@ fn unsaved_drawing_survives_an_unexpected_stop() {
     assert_eq!(back.bonds.len(), d.bonds.len());
     assert!(crate::recover::ago(t).contains("less than a minute"));
     crate::recover::remove(&f);
+    crate::recover::clear(0);
     crate::recover::goodbye();
     assert!(crate::recover::pending().is_none(), "restored or discarded copies are removed");
     assert!(!mine.exists(), "a normal close removes this window's copy");

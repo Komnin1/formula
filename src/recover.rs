@@ -22,9 +22,9 @@ pub fn data_dir() -> Option<PathBuf> {
     Some(dir)
 }
 
-/// Each window (a program of its own) keeps its own recovery copy, named by its process.
-fn recovery_file() -> Option<PathBuf> {
-    Some(data_dir()?.join(format!("Recovered drawing {}.cdxml", std::process::id())))
+/// Each window keeps its own recovery copy, named by the program's process and the window.
+fn recovery_file(win: u32) -> Option<PathBuf> {
+    Some(data_dir()?.join(format!("Recovered drawing {}-{}.cdxml", std::process::id(), win)))
 }
 
 /// A running window touches this file every few seconds, so other windows know its recovery
@@ -43,9 +43,8 @@ pub fn heartbeat() {
     }
 }
 
-/// The window is closing normally.
+/// The program is closing normally (its windows have cleared their own copies).
 pub fn goodbye() {
-    clear();
     if let Some(f) = alive_file(std::process::id()) {
         let _ = std::fs::remove_file(f);
     }
@@ -62,8 +61,8 @@ pub fn crash_dir() -> Option<PathBuf> {
 
 /// Copy the drawing to the recovery file (written next to it first, so a stop half-way
 /// through never leaves a broken copy).
-pub fn save(doc: &crate::doc::Doc) -> Result<(), String> {
-    let f = recovery_file().ok_or("no folder for the recovery copy")?;
+pub fn save(doc: &crate::doc::Doc, win: u32) -> Result<(), String> {
+    let f = recovery_file(win).ok_or("no folder for the recovery copy")?;
     if let Some(d) = f.parent() {
         std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
     }
@@ -73,8 +72,8 @@ pub fn save(doc: &crate::doc::Doc) -> Result<(), String> {
 }
 
 /// The work is saved or the program closed normally: the copy isn't needed.
-pub fn clear() {
-    if let Some(f) = recovery_file() {
+pub fn clear(win: u32) {
+    if let Some(f) = recovery_file(win) {
         let _ = std::fs::remove_file(f);
     }
 }
@@ -94,8 +93,8 @@ pub fn pending() -> Option<(PathBuf, SystemTime)> {
             if rest.ends_with(".tmp") {
                 return None;
             }
-            // The older single copy has no number; a numbered one belongs to that window.
-            if let Ok(pid) = rest.trim().parse::<u32>() {
+            // The older single copy has no number; "pid" or "pid-window" belongs to that program.
+            if let Ok(pid) = rest.trim().split('-').next().unwrap_or("").parse::<u32>() {
                 if pid == me {
                     return None;
                 }

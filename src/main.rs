@@ -21,6 +21,7 @@ mod hetero;
 mod hotkeys;
 mod icons;
 mod iupac;
+mod macapp;
 mod names;
 mod nmr;
 mod nmrlearn;
@@ -117,7 +118,10 @@ fn main() -> eframe::Result {
         clipboard_shortcuts: !clip::NATIVE,
         ..Default::default()
     };
-    let result = eframe::run_native(app::APP_NAME, options, Box::new(move |cc| Ok(Box::new(app::App::new(cc, shot, open)))));
+    let result = eframe::run_native(app::APP_NAME, options, Box::new(move |cc| {
+        let first = app::App::new(cc, shot, open);
+        Ok(Box::new(app::Windows::new(first, &cc.egui_ctx)))
+    }));
     ole::stop_server();
     result
 }

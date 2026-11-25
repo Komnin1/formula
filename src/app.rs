@@ -248,6 +248,17 @@ pub struct App {
     /// Automatic edit-cycle test: when it started, and whether the edit was made.
     auto_edit: Option<f64>,
     auto_edit_done: bool,
+    /// Which window of the program this is (0: the first). All windows run in one program,
+    /// so the Mac Dock shows one icon.
+    win: u32,
+    /// The window was closed (its drawing saved or let go).
+    pub gone: bool,
+    /// Close asked from the menu or ⌘W (handled like the window's close button).
+    close_pending: bool,
+    /// File ▸ New asked for a new window, with these drawing settings.
+    pub new_window_request: Option<Option<String>>,
+    /// File ▸ Quit: close every window.
+    pub quit_request: bool,
 }
 
 impl App {
@@ -258,7 +269,26 @@ impl App {
         style.spacing.item_spacing = vec2(6.0, 4.0);
         style.spacing.button_padding = vec2(6.0, 2.0);
         cc.egui_ctx.set_global_style(style);
-        let mut app = App {
+        let mut app = App::base(shot_path);
+        app.start(cc, open);
+        app
+    }
+
+    /// Another window with an empty drawing (File ▸ New), optionally with a settings preset.
+    pub fn another(win: u32, stationery: Option<&str>) -> Self {
+        let mut app = App::base(None);
+        app.win = win;
+        app.embedded = false;
+        app.status = "New document".into();
+        if let Some(p) = stationery.and_then(styles::find) {
+            styles::apply(&mut app.doc, styles::to_style(p, true));
+            app.status = format!("New document with the “{}” settings", p.name);
+        }
+        app
+    }
+
+    fn base(shot_path: Option<PathBuf>) -> Self {
+        App {
             doc: new_drawing(),
             undo: vec![],
             redo: vec![],
@@ -358,7 +388,17 @@ impl App {
             auto_edit_done: false,
             close_store: None,
             erase_last: None,
-        };
+            win: 0,
+            gone: false,
+            close_pending: false,
+            new_window_request: None,
+            quit_request: false,
+        }
+    }
+
+    /// The first window: start-up options, a file to open, a drawing to recover.
+    fn start(&mut self, cc: &eframe::CreationContext<'_>, open: Option<PathBuf>) {
+        let app = self;
         crate::ole::set_context(&cc.egui_ctx);
         if app.embedded {
             app.status("Waiting for the document to send the structure…");
@@ -427,6 +467,10 @@ impl App {
         if let Some(v) = std::env::args().skip_while(|a| a != "--nmr-enrich").nth(1).and_then(|v| v.parse::<f64>().ok()) {
             app.nmr_enrich = v.clamp(1.0, 100.0);
         }
+        // `--new-window`: start with a second document window open as well (for checks).
+        if std::env::args().any(|a| a == "--new-window") {
+            app.new_window_request = Some(None);
+        }
         if std::env::args().any(|a| a == "--select-all") {
             app.sel = app.doc.select_all();
             app.tool = Tool::Marquee;
@@ -435,12 +479,6 @@ impl App {
             styles::apply(&mut app.doc, styles::to_style(p, true));
             app.tab = Tab::Style;
         }
-        // A window opened by File ▸ New from Stationery in another window.
-        if let Some(p) = std::env::args().skip_while(|a| a != "--stationery").nth(1).and_then(|n| styles::find(&n)) {
-            styles::apply(&mut app.doc, styles::to_style(p, true));
-            app.status = format!("New document with the “{}” settings", p.name);
-        }
-        app
     }
 
     /// File ▸ New: a new window with an empty drawing; this window keeps its drawing, saved
@@ -457,17 +495,18 @@ impl App {
             }
             return;
         }
-        let started = std::env::current_exe().and_then(|exe| {
-            let mut c = std::process::Command::new(exe);
-            c.arg("--new-window");
-            if let Some(s) = stationery {
-                c.arg("--stationery").arg(s);
-            }
-            c.spawn()
-        });
-        match started {
-            Ok(_) => self.status("Opened a new document in a new window; this drawing stays here"),
-            Err(e) => self.status(format!("Could not open a new window: {}", e)),
+        // The program opens the window itself (one program, one Dock icon on the Mac).
+        self.new_window_request = Some(stationery.map(str::to_string));
+        self.status("Opened a new document in a new window; this drawing stays here");
+    }
+
+    /// Close this window as its close button would (asking to save first).
+    fn request_close(&mut self, ctx: &egui::Context) {
+        if self.embedded {
+            // An object's window closes the way the document expects (see `ole_frame`).
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        } else {
+            self.close_pending = true;
         }
     }
 
@@ -1704,8 +1743,120 @@ const PANEL_BG: Color32 = Color32::from_rgb(236, 236, 238);
 const ACCENT: Color32 = Color32::from_rgb(40, 110, 220);
 const SEL_FILL: Color32 = Color32::from_rgba_premultiplied(60, 130, 240, 70);
 
-impl eframe::App for App {
+/// Every document window of the program. They all run in this one program, so the Mac Dock
+/// shows a single icon. The first window is the program's main window; when it is closed
+/// while others are open it is hidden, and the program ends with the last window.
+pub struct Windows {
+    main: App,
+    others: Vec<App>,
+    next: u32,
+    main_hidden: bool,
+    frames: u64,
+    /// File ▸ Quit is closing every window: the program ends after the last one (on a Mac too).
+    quitting: bool,
+}
+
+impl Windows {
+    pub fn new(main: App, ctx: &egui::Context) -> Self {
+        crate::macapp::install(ctx);
+        Windows { main, others: Vec::new(), next: 1, main_hidden: false, frames: 0, quitting: false }
+    }
+}
+
+impl eframe::App for Windows {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+        if !self.main.gone {
+            self.main.window_ui(ui);
+        } else {
+            // The first window was closed while others are open: hidden, not ended.
+            egui::CentralPanel::default().show(ui, |_| {});
+        }
+        // The size a new window starts with (the same as the first window's).
+        let wide = vec2(1280.0, 800.0);
+        for app in &mut self.others {
+            let id = egui::ViewportId::from_hash_of(("formula-window", app.win));
+            let title = if app.title.is_empty() { APP_NAME.to_string() } else { app.title.clone() };
+            // New windows open a little down and to the right of the one before.
+            let k = (app.win % 8) as f32;
+            let builder = egui::ViewportBuilder::default()
+                .with_title(title)
+                .with_inner_size(wide)
+                .with_min_inner_size([760.0, 480.0])
+                .with_position(pos2(60.0 + 30.0 * k, 60.0 + 30.0 * k));
+            ctx.show_viewport_immediate(id, builder, |ui, _| app.window_ui(ui));
+        }
+        // File ▸ Quit in any window closes them all, each asking to save first.
+        let quit = self.main.quit_request || self.others.iter().any(|a| a.quit_request);
+        if quit {
+            self.quitting = true;
+            for a in std::iter::once(&mut self.main).chain(self.others.iter_mut()) {
+                a.quit_request = false;
+                if !a.gone {
+                    a.close_pending = true;
+                }
+            }
+            ctx.request_repaint();
+        }
+        // File ▸ New: another window. Not before the first window has been drawn a few times:
+        // the windows share the font picture, which must be on the graphics card first.
+        self.frames += 1;
+        if self.frames < 4 {
+            ctx.request_repaint();
+            return;
+        }
+        let asked: Vec<Option<String>> = std::iter::once(&mut self.main).chain(self.others.iter_mut()).filter_map(|a| a.new_window_request.take()).collect();
+        for st in asked {
+            let app = App::another(self.next, st.as_deref());
+            self.next += 1;
+            self.others.push(app);
+            ctx.request_repaint();
+        }
+        self.others.retain(|a| !a.gone);
+        // Quit was cancelled in a window (Cancel in "Save changes?"): the program goes on.
+        if self.quitting && std::iter::once(&self.main).chain(self.others.iter()).any(|a| !a.gone && a.close_ask == CloseAsk::None && !a.close_pending) {
+            self.quitting = false;
+        }
+        // The first window: hidden while others are open. Elsewhere the program ends with the
+        // last window; on a Mac it keeps running (menu bar and Dock icon stay) until Quit, and
+        // a click on the Dock icon opens a new window.
+        if self.main.gone {
+            let stay = cfg!(target_os = "macos") && !self.quitting && self.main.shot_path.is_none() && !self.main.embedded;
+            if self.others.is_empty() && stay {
+                if ctx.input_for(egui::ViewportId::ROOT, |i| i.viewport().close_requested()) {
+                    ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::CancelClose);
+                }
+                if crate::macapp::take_reopen() {
+                    let fresh = App::another(self.next, None);
+                    self.next += 1;
+                    self.main = fresh;
+                    self.main_hidden = false;
+                    ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Visible(true));
+                    ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
+                    ctx.request_repaint();
+                } else if !self.main_hidden {
+                    self.main_hidden = true;
+                    ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Visible(false));
+                }
+            } else if self.others.is_empty() {
+                crate::recover::goodbye();
+                ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Close);
+            } else {
+                if ctx.input_for(egui::ViewportId::ROOT, |i| i.viewport().close_requested()) {
+                    ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::CancelClose);
+                }
+                if !self.main_hidden {
+                    self.main_hidden = true;
+                    ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Visible(false));
+                }
+            }
+        }
+    }
+}
+
+impl App {
+    /// One document window: menus, tools, the drawing and the side panel.
+    pub fn window_ui(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
         self.frame += 1;
         self.ole_frame(&ctx);
@@ -1887,13 +2038,18 @@ impl App {
             }
             return;
         }
-        if ctx.input(|i| i.viewport().close_requested()) {
+        let asked = ctx.input(|i| i.viewport().close_requested()) || std::mem::take(&mut self.close_pending);
+        if asked && !self.gone {
             if self.dirty && !self.allow_close && self.shot_path.is_none() {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                 self.close_ask = CloseAsk::Asking;
-            } else if self.shot_path.is_none() && self.recovery_offer.is_none() {
-                // A normal close: the recovery copy isn't needed any more.
-                crate::recover::goodbye();
+            } else {
+                if self.shot_path.is_none() && self.recovery_offer.is_none() {
+                    // A normal close: this window's recovery copy isn't needed any more.
+                    crate::recover::clear(self.win);
+                }
+                // The program closes the window (and quits after the last one).
+                self.gone = true;
             }
         }
     }
@@ -1916,7 +2072,7 @@ impl App {
         }
         if !self.dirty {
             if self.recovery_written {
-                crate::recover::clear();
+                crate::recover::clear(self.win);
                 self.recovery_written = false;
             }
             self.saved_gen = self.edit_gen;
@@ -1933,7 +2089,7 @@ impl App {
         }
         self.last_autosave = now;
         self.saved_gen = self.edit_gen;
-        if crate::recover::save(&self.doc).is_ok() {
+        if crate::recover::save(&self.doc, self.win).is_ok() {
             self.recovery_written = true;
         }
     }
@@ -2051,14 +2207,14 @@ impl App {
                     self.save(ctx);
                     if !self.dirty {
                         self.allow_close = true;
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        self.request_close(ctx);
                     }
                     self.close_ask = CloseAsk::None;
                 }
                 if ui.button("Don't Save").clicked() {
                     self.allow_close = true;
                     self.close_ask = CloseAsk::None;
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    self.request_close(ctx);
                 }
                 if ui.button("Cancel").clicked() {
                     self.close_ask = CloseAsk::None;
@@ -2140,7 +2296,7 @@ impl App {
             self.save(ctx);
         }
         if cmd(Key::W) {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            self.request_close(ctx);
         }
         if cmd(Key::P) {
             self.print(ctx);

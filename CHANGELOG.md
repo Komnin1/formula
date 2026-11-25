@@ -15,9 +15,16 @@ To release a new version:
 
 ## Not yet released
 
-## 0.0.7 — 2026-11-24
+## 0.0.7 — 2026-11-25 (updated build)
 
-Source package: `dist/Formula-0.0.7-source.zip` (see `BUILD.md`).
+Source package: `dist/Formula-0.0.7-source.zip` (see `BUILD.md`), rebuilt with the window changes below.
+
+- New windows are opened by the running program instead of starting a second copy, so the Mac Dock shows one Formula icon however many windows are open.
+  - Closing the first window keeps the others open, and the program ends when the last window closes.
+  - File ▸ Quit closes every window, asking about unsaved changes in each.
+- Mac: closing the last window no longer ends the program, as with other Mac programs. The menu bar and Dock icon stay, a click on the Dock icon opens a new window, and Quit (⌘Q) ends it. Windows and Linux still end with the last window.
+
+## 0.0.7 — 2026-11-24 (first build)
 
 - File ▸ New, New from Stationery, the New button and ⌘N / Ctrl+N open the new document in a new window. The drawing you were working on stays open in its own window, saved or not, and an unchanged window gets a new one too.
   - Any number of windows can be open at once.

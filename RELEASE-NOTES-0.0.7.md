@@ -2,6 +2,9 @@
 
 ## Multiple windows
 - New Document opens in a new window. The drawing you were working on stays open, saved or not, and any number of windows can be open at once.
+- All windows belong to one running program, so the Mac Dock shows a single Formula icon.
+- Closing the first window keeps the others open. File ▸ Quit closes every window, asking about unsaved changes in each.
+- Mac: closing the last window leaves Formula running, as Mac programs usually do. Click the Dock icon for a new window, or press ⌘Q to quit. On Windows and Linux the program ends with its last window.
 - Each window keeps its own recovery copy. After a crash, only drawings from windows that stopped are offered back.
 
 ## Names

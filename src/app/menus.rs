@@ -371,7 +371,7 @@ impl App {
             ui.separator();
             if item(ui, "Close", "⌘W") {
                 ui.close();
-                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                self.request_close(ctx);
             }
             if item(ui, "Save", "⌘S") {
                 ui.close();
@@ -431,7 +431,12 @@ impl App {
             ui.separator();
             if item(ui, "Quit", "⌘Q") {
                 ui.close();
-                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                // Every window closes (each asks to save its changes first).
+                if self.embedded {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                } else {
+                    self.quit_request = true;
+                }
             }
         });
         ui.menu_button("Edit", |ui| {
