@@ -23,9 +23,6 @@ Source package: `dist/Formula-0.0.7-source.zip` (see `BUILD.md`).
   - Any number of windows can be open at once.
   - Each window keeps its own recovery copy. After a crash, only the drawings of windows that are no longer running are offered back.
 
-- Cocaine and biotin get their systematic names:
-  - cocaine: methyl 3-(benzoyloxy)-8-methyl-8-azabicyclo[3.2.1]octane-2-carboxylate. With several esters, the one with the smallest alcohol part is named as the ester and the rest become prefixes;
-  - biotin: 5-(2-oxohexahydro-1H-thieno[3,4-d]imidazol-4-yl)pentanoic acid. Thieno[3,4-d]imidazole is a new named ring system, and a fully saturated ring system is written "hexahydro" without locants.
 - Templates: norbornane, the new norbornene and adamantane are drawn in perspective, traced from the person's drawings. A bond that passes behind another is broken where they cross. At a sharp corner the inner line of a ring double bond stops short instead of running past it.
 
 - Names: the systematic (IUPAC) name is always given. A well-known compound shows both names, "2-(acetyloxy)benzoic acid (aspirin)", with separate *IUPAC name* and *Trivial name* rows in Analysis.
