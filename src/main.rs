@@ -54,7 +54,7 @@ fn main() -> eframe::Result {
                 args.next();
                 args.next();
             }
-            "--style" | "--tab" | "--templates" | "--stationery" => {
+            "--style" | "--tab" | "--templates" | "--stationery" | "--also-open" => {
                 args.next();
             }
             s if ole::is_embedding_arg(s) => {}

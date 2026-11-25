@@ -1,21 +1,21 @@
 # Building Formula yourself
 
 This package holds Formula's full source and the scripts that turn it into a program. The
-version is set in `Cargo.toml` (now 0.0.7); the scripts take it from there.
+version is set in `Cargo.toml` (now 0.0.8); the scripts take it from there.
 
 | You want | Build on | Run | Result |
 |---|---|---|---|
-| Mac app, Intel + Apple silicon in one | a Mac, macOS 11 or newer | `installer/macos/build-on-mac.command` | `installer/macos/Output/Formula-0.0.7.dmg` |
-| Windows, 64-bit (x64): almost all PCs | Windows 10/11 | `installer\windows\build-installer.bat` | `installer\windows\Output\Formula-Setup-0.0.7.exe` |
-| Windows, 32-bit (x86) | Windows 10/11 | `installer\windows\build-installer-x86.bat` | `installer\windows\Output\Formula-Setup-0.0.7-x86.exe` |
-| Linux .deb, x86-64 and aarch64 (Debian 12+, Ubuntu 22.04+) | any computer with Docker | `sh installer/linux/build-deb.sh` | `installer/linux/Output/formula_0.0.7_amd64.deb`, `formula_0.0.7_arm64.deb` |
+| Mac app, Intel + Apple silicon in one | a Mac, macOS 11 or newer | `installer/macos/build-on-mac.command` | `installer/macos/Output/Formula-0.0.8.dmg` |
+| Windows, 64-bit (x64): almost all PCs | Windows 10/11 | `installer\windows\build-installer.bat` | `installer\windows\Output\Formula-Setup-0.0.8.exe` |
+| Windows, 32-bit (x86) | Windows 10/11 | `installer\windows\build-installer-x86.bat` | `installer\windows\Output\Formula-Setup-0.0.8-x86.exe` |
+| Linux .deb, x86-64 and aarch64 (Debian 12+, Ubuntu 22.04+) | any computer with Docker | `sh installer/linux/build-deb.sh` | `installer/linux/Output/formula_0.0.8_amd64.deb`, `formula_0.0.8_arm64.deb` |
 
 On Debian or Ubuntu without Docker, `sh installer/linux/make-deb.sh` builds the package for
-that machine. Install it with `sudo apt install ./formula_0.0.7_amd64.deb`.
+that machine. Install it with `sudo apt install ./formula_0.0.8_amd64.deb`.
 
 For any Linux distribution there is also a Flatpak: `sh installer/flatpak/build-flatpak.sh`
-(Docker again) writes `installer/flatpak/Output/formula_0.0.7_amd64.flatpak` and
-`formula_0.0.7_arm64.flatpak`. Install one with `flatpak install --user ./formula_0.0.7_amd64.flatpak`.
+(Docker again) writes `installer/flatpak/Output/formula_0.0.8_amd64.flatpak` and
+`formula_0.0.8_arm64.flatpak`. Install one with `flatpak install --user ./formula_0.0.8_amd64.flatpak`.
 Each architecture has to be built on a computer of that kind: on an Apple-silicon Mac only
 the arm64 Flatpak builds (`sh installer/flatpak/build-flatpak.sh arm64`), because Flatpak's
 sandbox doesn't run under x86-64 emulation.
@@ -36,7 +36,7 @@ take a minute or two. An internet connection is needed for the first build.
    and Apple-silicon Macs. Finder then opens the folder with the .dmg.
 
 To check that the app holds both kinds of code:
-`lipo -info "/Volumes/Formula 0.0.7/Formula.app/Contents/MacOS/formula"` lists
+`lipo -info "/Volumes/Formula 0.0.8/Formula.app/Contents/MacOS/formula"` lists
 `x86_64 arm64`.
 
 First start: the app isn't signed with a paid Apple Developer ID, so right-click Formula in

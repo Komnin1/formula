@@ -81,6 +81,17 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.0.8" date="2026-11-25">
+      <description>
+        <ul>
+          <li>Open and Open Recent use a new window when the current one already holds a document</li>
+          <li>Unsaved documents are numbered across windows: Untitled_1, Untitled_2…</li>
+          <li>Available as a Flatpak</li>
+          <li>Linux: the desktop shows Formula's icon on its windows under Wayland</li>
+          <li>Linux: settings and recovery copies are kept in the XDG config folder</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.0.7" date="2026-11-25">
       <description>
         <ul>

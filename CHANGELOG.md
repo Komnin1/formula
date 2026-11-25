@@ -15,9 +15,16 @@ To release a new version:
 
 ## Not yet released
 
-- Linux: recent files, recovery copies and crash logs go to `$XDG_CONFIG_HOME/formula` when that is set, otherwise `~/.config/formula` as before. A Flatpak sets it to the app's own folder.
-- Linux: windows carry the app ID ("formula", or the Flatpak's ID), so the desktop shows Formula's icon for them under Wayland.
-- Flatpak packaging in `installer/flatpak` (app ID `io.github.Komnin1.Formula`).
+## 0.0.8 — 2026-11-25
+
+Source package: `dist/Formula-0.0.8-source.zip` (see `BUILD.md`).
+
+- Linux: windows carry the app ID, so the desktop shows Formula's icon under Wayland: the Flatpak's ID inside a Flatpak, "formula" otherwise.
+- Linux: settings, recent files and recovery copies go to `$XDG_CONFIG_HOME/formula` when that is set (needed for the Flatpak), `~/.config/formula` otherwise.
+- File ▸ Open and Open Recent put the file in a new window when the current window already has a document. Only an empty, untouched window is reused.
+- Unsaved documents are numbered across windows: Untitled_1, Untitled_2…, in the window title and as the suggested name when saving.
+- Mac: the menu bar has a Window menu (Minimize, Zoom, Bring All to Front, then the open windows). The Dock icon's menu lists Formula's open windows by name.
+- New: Flatpak packaging in `installer/flatpak`.
 
 ## 0.0.7 — 2026-11-25 (updated build)
 

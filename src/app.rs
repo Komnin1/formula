@@ -265,7 +265,14 @@ pub struct App {
     pub new_window_request: Option<Option<String>>,
     /// File ▸ Quit: close every window.
     pub quit_request: bool,
+    /// File ▸ Open (or Open Recent) while this window has a document: open it in a new window.
+    pub open_request: Option<PathBuf>,
+    /// "Untitled_3": the number of this untitled document (0 until it is first needed).
+    untitled_no: u32,
 }
+
+/// Untitled documents are numbered across all windows: Untitled_1, Untitled_2…
+static NEXT_UNTITLED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, shot_path: Option<PathBuf>, open: Option<PathBuf>) -> Self {
@@ -399,6 +406,32 @@ impl App {
             close_pending: false,
             new_window_request: None,
             quit_request: false,
+            open_request: None,
+            untitled_no: 0,
+        }
+    }
+
+    /// "Untitled_2" for a document that has no file yet (numbered when first shown).
+    fn untitled_name(&mut self) -> String {
+        if self.untitled_no == 0 {
+            self.untitled_no = NEXT_UNTITLED.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+        format!("Untitled_{}", self.untitled_no)
+    }
+
+    /// The window holds nothing yet: an untouched, unnamed, empty drawing.
+    fn is_blank(&self) -> bool {
+        !self.dirty && self.path.is_none() && self.doc.atoms.is_empty() && self.doc.captions.is_empty() && self.doc.arrows.is_empty() && self.doc.shapes.is_empty()
+    }
+
+    /// File ▸ Open and Open Recent: into this window when it is still empty, otherwise into a
+    /// new window, so the document already open stays where it is.
+    fn open_file(&mut self, p: PathBuf, ctx: &egui::Context) {
+        if self.is_blank() || self.embedded {
+            self.open_path(p, ctx);
+        } else {
+            self.status(format!("Opening {} in a new window", file_name(&p)));
+            self.open_request = Some(p);
         }
     }
 
@@ -472,6 +505,10 @@ impl App {
         // `--nmr-enrich 50`: isotope enrichment (%) used by the NMR prediction.
         if let Some(v) = std::env::args().skip_while(|a| a != "--nmr-enrich").nth(1).and_then(|v| v.parse::<f64>().ok()) {
             app.nmr_enrich = v.clamp(1.0, 100.0);
+        }
+        // `--also-open <file>`: then open another file as File ▸ Open would (for checks).
+        if let Some(p) = std::env::args().skip_while(|a| a != "--also-open").nth(1) {
+            app.open_file(PathBuf::from(p), &cc.egui_ctx);
         }
         // `--new-window`: start with a second document window open as well (for checks).
         if std::env::args().any(|a| a == "--new-window") {
@@ -738,7 +775,7 @@ impl App {
             .add_filter("FASTA sequences (*.fasta)", &["fasta", "fa", "fas", "faa", "fna", "ffn"])
             .pick_file();
         if let Some(p) = f {
-            self.open_path(p, ctx);
+            self.open_file(p, ctx);
         }
     }
 
@@ -799,7 +836,10 @@ impl App {
     }
 
     fn save_as(&mut self, ctx: &egui::Context) {
-        let name = self.path.as_ref().and_then(|p| p.file_stem()).map(|s| s.to_string_lossy().to_string()).unwrap_or("Untitled".into());
+        let name = match self.path.as_ref().and_then(|p| p.file_stem()) {
+            Some(s) => s.to_string_lossy().to_string(),
+            None => self.untitled_name(),
+        };
         let f = rfd::FileDialog::new()
             .set_file_name(format!("{}.cdx", name))
             .add_filter("CDX document (*.cdx)", &["cdx"])
@@ -826,7 +866,10 @@ impl App {
     }
 
     fn export_variant(&mut self, ctx: &egui::Context, label: &str, ext: &str, v3000: bool) {
-        let name = self.path.as_ref().and_then(|p| p.file_stem()).map(|s| s.to_string_lossy().to_string()).unwrap_or("Untitled".into());
+        let name = match self.path.as_ref().and_then(|p| p.file_stem()) {
+            Some(s) => s.to_string_lossy().to_string(),
+            None => self.untitled_name(),
+        };
         let f = rfd::FileDialog::new().set_file_name(format!("{}.{}", name, ext)).add_filter(label, &[ext]).save_file();
         let Some(p) = f else { return };
         if v3000 {
@@ -1819,6 +1862,17 @@ impl eframe::App for Windows {
             self.others.push(app);
             ctx.request_repaint();
         }
+        // File ▸ Open / Open Recent with a document already in the window: a new window.
+        let files: Vec<PathBuf> = std::iter::once(&mut self.main).chain(self.others.iter_mut()).filter_map(|a| a.open_request.take()).collect();
+        for p in files {
+            let mut app = App::another(self.next, None);
+            self.next += 1;
+            app.open_path(p, &ctx);
+            self.others.push(app);
+            ctx.request_repaint();
+        }
+        // Mac: the open windows are listed in the Window menu and the Dock icon's menu.
+        crate::macapp::tidy_window_list();
         self.others.retain(|a| !a.gone);
         // Quit was cancelled in a window (Cancel in "Save changes?"): the program goes on.
         if self.quitting && std::iter::once(&self.main).chain(self.others.iter()).any(|a| !a.gone && a.close_ask == CloseAsk::None && !a.close_pending) {
@@ -1997,7 +2051,10 @@ impl App {
         let name = if self.embedded {
             format!("Structure in {}", self.host.as_deref().unwrap_or("a document"))
         } else {
-            self.path.as_ref().map(|p| file_name(p)).unwrap_or("Untitled".into())
+            match &self.path {
+                Some(p) => file_name(p),
+                None => self.untitled_name(),
+            }
         };
         let t = format!("{}{} — {}", if self.dirty { "• " } else { "" }, name, APP_NAME);
         if t != self.title {

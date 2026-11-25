@@ -4,7 +4,7 @@ A free desktop editor for chemical structures and reactions, for macOS, Windows 
 Draw molecules for papers and reports, check formulas and masses, predict NMR spectra and
 exchange files in CDX/CDXML, Molfile and SMILES — all offline.
 
-Version 0.0.7 (see [CHANGELOG.md](CHANGELOG.md)). Developed by Arkadiy Bazhin with the help
+Version 0.0.8 (see [CHANGELOG.md](CHANGELOG.md)). Developed by Arkadiy Bazhin with the help
 of CraftAnything and Claude Code.
 
 ![Formula with the ACS Document 1996 style](shots/acs.png)
@@ -21,6 +21,7 @@ Get the installer for your computer from the
 | Windows, 32-bit | `Formula-Setup-<version>-x86.exe` |
 | Linux x86-64 (Debian 12+, Ubuntu 22.04+) | `formula_<version>_amd64.deb` |
 | Linux ARM64 (e.g. Raspberry Pi 4/5) | `formula_<version>_arm64.deb` |
+| Linux ARM64, any distribution (Flatpak) | `formula_<version>_arm64.flatpak` |
 
 The release page explains how to open the app the first time on each system. To build it
 yourself, see [BUILD.md](BUILD.md).
@@ -58,7 +59,9 @@ yourself, see [BUILD.md](BUILD.md).
   hydrogen counts update as bonds are added.
 - Isotope labels (¹³C, ¹⁵N, ²H/D, ¹⁸O, …) by right-click, menu or typing "13C" in a label.
 - Structure checking marks atoms with impossible valences.
-- Several documents at once, each in its own window.
+- Several documents at once, each in its own window. Opening a file uses a new window when
+  the current one already holds a document, and unsaved documents are numbered Untitled_1,
+  Untitled_2… On the Mac, the Window menu and the Dock icon's menu list the open windows.
 - Automatic recovery: unsaved work in every window is kept if the program stops unexpectedly.
 
 ![Example structures drawn in Formula, with the Document settings panel](shots/examples.png)

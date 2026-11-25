@@ -358,7 +358,7 @@ impl App {
                 for p in self.recent.clone() {
                     if ui.button(file_name(&p)).on_hover_text(p.display().to_string()).clicked() {
                         ui.close();
-                        self.open_path(p, ctx);
+                        self.open_file(p, ctx);
                     }
                 }
                 ui.separator();
