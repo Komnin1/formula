@@ -10,8 +10,9 @@
 # (Flatpak fetches the freedesktop runtime from Flathub the first time.)
 #
 # The first build downloads the freedesktop runtime and SDK (about 1 GB per architecture);
-# Docker volumes keep them for later builds. Building for the other architecture than the
-# computer's own runs under emulation and takes much longer.
+# Docker volumes keep them for later builds. Each architecture must be built on a computer
+# of that kind: Flatpak's sandbox can't run under emulation (on an Apple-silicon Mac, the
+# amd64 build stops with a seccomp error), so build there with "arm64" only.
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
 APP="$(cd "$HERE/../.." && pwd)"

@@ -16,6 +16,9 @@ that machine. Install it with `sudo apt install ./formula_0.0.7_amd64.deb`.
 For any Linux distribution there is also a Flatpak: `sh installer/flatpak/build-flatpak.sh`
 (Docker again) writes `installer/flatpak/Output/formula_0.0.7_amd64.flatpak` and
 `formula_0.0.7_arm64.flatpak`. Install one with `flatpak install --user ./formula_0.0.7_amd64.flatpak`.
+Each architecture has to be built on a computer of that kind: on an Apple-silicon Mac only
+the arm64 Flatpak builds (`sh installer/flatpak/build-flatpak.sh arm64`), because Flatpak's
+sandbox doesn't run under x86-64 emulation.
 After changing `Cargo.lock`, run `python3 installer/flatpak/make-cargo-sources.py` first: the
 Flatpak is built without internet access, from the list of libraries this writes.
 
