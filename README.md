@@ -138,6 +138,8 @@ the analysis, NMR and naming tools.
   <img src="shots/seq-rna.png" alt="The same sequence transcribed to RNA" width="49%">
 </p>
 
+![DNA drawn as HELM monomers: deoxyribose heptagons, phosphate diamonds and base trapezoids](shots/seq-dna-helm.png)
+
 ### Files
 
 - **Open and save:** CDX and CDXML (.cdx, .cdxml, .ctp), Molfile V2000/V3000, SDfile,
