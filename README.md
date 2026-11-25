@@ -169,12 +169,14 @@ Installers for each system are built with the scripts in `installer/`; see
 
 ## How it was made
 
-Formula was written from scratch without access to the code, files or
-resources of any other chemistry program: no other program's files were
-opened, decompiled or copied while building it. File formats were implemented
-from publicly documented descriptions and general chemistry knowledge. Some
-details (for example a few binary style tags and the numbers behind the journal
-style presets) are best guesses and may differ from other programs.
+Formula was written from scratch. No code from any other chemistry program was
+used, and no program was decompiled or reverse-engineered. The CDX and CDXML
+formats were implemented from their publicly documented specifications. So that
+people used to established structure editors can switch easily, the menus,
+keyboard shortcuts and journal-style presets follow common conventions: the
+preset values (bond length, line widths, fonts) were taken from the settings
+those programs display. A few details, such as some binary style tags, are best
+guesses and may differ from other programs.
 
 ## Trademarks
 
