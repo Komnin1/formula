@@ -26,6 +26,9 @@ Source package: `dist/Formula-0.0.7-source.zip` (see `BUILD.md`).
 - Templates: norbornane, the new norbornene and adamantane are drawn in perspective, traced from the person's drawings. A bond that passes behind another is broken where they cross. At a sharp corner the inner line of a ring double bond stops short instead of running past it.
 
 - Names: the systematic (IUPAC) name is always given. A well-known compound shows both names, "2-(acetyloxy)benzoic acid (aspirin)", with separate *IUPAC name* and *Trivial name* rows in Analysis.
+- Esters and saturated rings:
+  - with several esters, the one with the smallest alcohol part is named as the ester and the rest become prefixes;
+  - a fully saturated ring system is written "hexahydro" without locants.
 - Bridged, caged and spiro ring systems are named and read back:
   - von Baeyer names: bicyclo[2.2.1]heptane, tricyclo[3.3.1.1³,⁷]decane (adamantane), pentacyclo[4.2.0.0²,⁵.0³,⁸.0⁴,⁷]octane (cubane);
   - with heteroatoms: 8-methyl-8-azabicyclo[3.2.1]octan-3-ol (tropine), 1,4-diazabicyclo[2.2.2]octane, the penicillin and scopolamine cores;
