@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.Komnin1.Formula</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <name>Formula</name>
+  <summary>Draw chemical structures and reactions</summary>
+
+  <developer id="io.github.komnin1">
+    <name>Arkadiy Bazhin</name>
+  </developer>
+
+  <description>
+    <p>
+      Formula is a free desktop editor for chemical structures and reactions. Draw molecules
+      for papers and reports, check formulas and masses, predict NMR spectra and exchange
+      files in CDX/CDXML, Molfile and SMILES, all offline.
+    </p>
+    <ul>
+      <li>Drawing: all common bond types, rings, chains, 56 arrow styles, shapes, brackets and text; templates for amino acids, sugars, nucleotides and conformers; hot keys, structure clean-up, aligning and distributing</li>
+      <li>21 document styles modelled on common journal formats, plus a dark mode</li>
+      <li>Analysis: molecular formula, exact mass, molecular weight, elemental analysis, isotopic distribution and a predicted mass spectrum</li>
+      <li>NMR prediction: ¹H, ¹³C, ¹⁹F, ³¹P and ¹⁵N shifts with multiplicities and coupling constants, and peak lists in the common experimental-section style</li>
+      <li>Systematic IUPAC names for most structures, including bridged and spiro ring systems, and name-to-structure conversion</li>
+      <li>Protein, DNA and RNA sequences: FASTA, transcription, translation, masses, and HELM-style monomers</li>
+      <li>Opens and saves CDX/CDXML, Molfile, SDfile, RXN, CML, SMILES and FASTA; exports PDF, EPS, SVG, PNG, JPEG, GIF, BMP and TIFF</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">io.github.Komnin1.Formula.desktop</launchable>
+  <provides>
+    <binary>formula</binary>
+  </provides>
+
+  <url type="homepage">https://github.com/Komnin1/formula</url>
+  <url type="bugtracker">https://github.com/Komnin1/formula/issues</url>
+  <url type="vcs-browser">https://github.com/Komnin1/formula</url>
+
+  <categories>
+    <category>Science</category>
+    <category>Chemistry</category>
+  </categories>
+  <keywords>
+    <keyword>chemistry</keyword>
+    <keyword>molecule</keyword>
+    <keyword>structure</keyword>
+    <keyword>reaction</keyword>
+    <keyword>NMR</keyword>
+    <keyword>IUPAC</keyword>
+    <keyword>SMILES</keyword>
+  </keywords>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>Example structures with the document settings</caption>
+      <image>https://raw.githubusercontent.com/Komnin1/formula/main/shots/examples.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Predicted ¹H NMR spectrum with shifts on the structure</caption>
+      <image>https://raw.githubusercontent.com/Komnin1/formula/main/shots/nmr-1h.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Formula, masses and the predicted mass spectrum</caption>
+      <image>https://raw.githubusercontent.com/Komnin1/formula/main/shots/mass-spectrum.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>DNA drawn as HELM monomers</caption>
+      <image>https://raw.githubusercontent.com/Komnin1/formula/main/shots/seq-dna-helm.png</image>
+    </screenshot>
+  </screenshots>
+
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+
+  <content_rating type="oars-1.1"/>
+
+  <releases>
+    <release version="0.0.7" date="2026-11-25">
+      <description>
+        <ul>
+          <li>Several documents at once, each in its own window, all in one running program</li>
+          <li>Systematic names for bridged, caged and spiro ring systems, and about 50 more named ring systems</li>
+          <li>The systematic name is always shown, with the trivial name next to it for well-known compounds</li>
+          <li>Ring tools show a preview that follows the mouse</li>
+          <li>DNA and RNA can be drawn as HELM monomers</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.0.6" date="2026-11-23">
+      <description>
+        <ul>
+          <li>Proportional scaling of structures</li>
+          <li>Copy puts a picture on the clipboard under X11 and Wayland</li>
+          <li>NMR shifts corrected with measured values from published spectra</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.0.5" date="2026-11-21"/>
+  </releases>
+</component>

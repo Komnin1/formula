@@ -15,6 +15,10 @@ To release a new version:
 
 ## Not yet released
 
+- Linux: recent files, recovery copies and crash logs go to `$XDG_CONFIG_HOME/formula` when that is set, otherwise `~/.config/formula` as before. A Flatpak sets it to the app's own folder.
+- Linux: windows carry the app ID ("formula", or the Flatpak's ID), so the desktop shows Formula's icon for them under Wayland.
+- Flatpak packaging in `installer/flatpak` (app ID `io.github.Komnin1.Formula`).
+
 ## 0.0.7 — 2026-11-25 (updated build)
 
 Source package: `dist/Formula-0.0.7-source.zip` (see `BUILD.md`), rebuilt with the window changes below.

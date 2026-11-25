@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Formula
+Comment=Draw chemical structures and reactions
+Exec=formula %f
+Icon=io.github.Komnin1.Formula
+Terminal=false
+Categories=Science;Chemistry;
+Keywords=chemistry;molecule;structure;reaction;NMR;mass spectrum;IUPAC;SMILES;CDX;CDXML;molfile;
+MimeType=chemical/x-cdx;chemical/x-cdxml;chemical/x-mdl-molfile;chemical/x-mdl-sdfile;chemical/x-mdl-rxnfile;chemical/x-cml;chemical/x-daylight-smiles;

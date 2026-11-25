@@ -1,0 +1,49 @@
+# Flatpak manifest for Formula.
+# Local build: sh installer/flatpak/build-flatpak.sh (see BUILD.md).
+# For Flathub, the "dir" source below is replaced by the release's git tag and commit.
+id: io.github.Komnin1.Formula
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: formula
+finish-args:
+  # A window on screen (Wayland, or X11 where Wayland isn't available), OpenGL, and the
+  # clipboard. Files are opened and saved through the system's file dialogs, so no access to
+  # the home folder is needed.
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    CARGO_HOME: /run/build/formula/cargo
+    CARGO_NET_OFFLINE: 'true'
+modules:
+  - name: formula
+    buildsystem: simple
+    build-commands:
+      - cargo --offline build --release --locked
+      - install -Dm755 target/release/formula /app/bin/formula
+      - install -Dm644 assets/icon.png /app/share/icons/hicolor/256x256/apps/io.github.Komnin1.Formula.png
+      - install -Dm644 installer/flatpak/io.github.Komnin1.Formula.desktop /app/share/applications/io.github.Komnin1.Formula.desktop
+      - install -Dm644 installer/flatpak/io.github.Komnin1.Formula.metainfo.xml /app/share/metainfo/io.github.Komnin1.Formula.metainfo.xml
+      - install -Dm644 LICENSE /app/share/licenses/io.github.Komnin1.Formula/LICENSE
+      - install -Dm644 THIRD-PARTY.md /app/share/licenses/io.github.Komnin1.Formula/THIRD-PARTY.md
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - target
+          - dist
+          - .git
+          - installer/linux/Output
+          - installer/macos/Output
+          - installer/windows/Output
+          - installer/flatpak/build
+          - installer/flatpak/repo
+          - installer/flatpak/Output
+          - installer/flatpak/.flatpak-builder
+      - cargo-sources.json

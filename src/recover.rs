@@ -17,7 +17,13 @@ pub fn data_dir() -> Option<PathBuf> {
     } else if cfg!(target_os = "macos") {
         PathBuf::from(std::env::var_os("HOME")?).join("Library/Application Support").join(name)
     } else {
-        PathBuf::from(std::env::var_os("HOME")?).join(".config/formula")
+        // XDG_CONFIG_HOME when it is set (a Flatpak sets it to the app's own folder, as the
+        // sandbox can't write to ~/.config); otherwise ~/.config as before.
+        let config = match std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).filter(|p| p.is_absolute()) {
+            Some(c) => c,
+            None => PathBuf::from(std::env::var_os("HOME")?).join(".config"),
+        };
+        config.join("formula")
     };
     Some(dir)
 }

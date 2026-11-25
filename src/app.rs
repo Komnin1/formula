@@ -22,6 +22,12 @@ mod seq;
 mod tpl;
 
 pub const APP_NAME: &str = "Formula";
+
+/// The name Linux desktops use to match a window to its desktop file and icon: the Flatpak's
+/// own ID inside a Flatpak, otherwise "formula" (the .deb's formula.desktop).
+pub fn app_id() -> String {
+    std::env::var("FLATPAK_ID").unwrap_or_else(|_| "formula".to_string())
+}
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const APP_CREDIT: &str = "Developed by Arkadiy Bazhin with the help of CraftAnything and Claude Code.";
 pub const APP_LICENSE: &str = "Free software under the MIT License.";
@@ -1781,6 +1787,7 @@ impl eframe::App for Windows {
             let k = (app.win % 8) as f32;
             let builder = egui::ViewportBuilder::default()
                 .with_title(title)
+                .with_app_id(app_id())
                 .with_inner_size(wide)
                 .with_min_inner_size([760.0, 480.0])
                 .with_position(pos2(60.0 + 30.0 * k, 60.0 + 30.0 * k));

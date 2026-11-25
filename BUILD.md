@@ -13,6 +13,12 @@ version is set in `Cargo.toml` (now 0.0.7); the scripts take it from there.
 On Debian or Ubuntu without Docker, `sh installer/linux/make-deb.sh` builds the package for
 that machine. Install it with `sudo apt install ./formula_0.0.7_amd64.deb`.
 
+For any Linux distribution there is also a Flatpak: `sh installer/flatpak/build-flatpak.sh`
+(Docker again) writes `installer/flatpak/Output/formula_0.0.7_amd64.flatpak` and
+`formula_0.0.7_arm64.flatpak`. Install one with `flatpak install --user ./formula_0.0.7_amd64.flatpak`.
+After changing `Cargo.lock`, run `python3 installer/flatpak/make-cargo-sources.py` first: the
+Flatpak is built without internet access, from the list of libraries this writes.
+
 The first build downloads the libraries Formula uses and takes 5–15 minutes; later builds
 take a minute or two. An internet connection is needed for the first build.
 
